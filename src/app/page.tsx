@@ -58,6 +58,7 @@ export default function Home() {
     try {
       response = await fetch('/api/analyze', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scriptContent,
