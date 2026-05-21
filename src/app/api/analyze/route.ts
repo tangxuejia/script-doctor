@@ -649,6 +649,7 @@ interface PersistParams {
   fullContent: string;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 async function persist(db: SupabaseClient, p: PersistParams) {
   try {
     const tokenEst = Math.ceil(p.fullContent.length / 3);
@@ -681,3 +682,4 @@ async function persist(db: SupabaseClient, p: PersistParams) {
     console.error('Failed to persist analysis records:', err);
   }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
