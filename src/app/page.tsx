@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useScriptStore } from '@/store/useScriptStore';
-import { supabase } from '@/lib/supabase';
+import { analyzeScript } from '@/lib/analyze-client';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
@@ -55,79 +55,20 @@ export default function Home() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    let response: Response;
-    try {
-      response = await fetch('/api/analyze', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    analyzeScript(
+      { scriptContent, modules: selectedModules },
+      {
+        onChunk: (chunk) => appendReport(chunk),
+        onError: (errMsg) => {
+          setError(errMsg);
+          setIsAnalyzing(false);
         },
-        body: JSON.stringify({
-          scriptContent,
-          modules: selectedModules,
-        }),
-        signal: controller.signal,
-      });
-    } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return;
-      setError('网络请求失败，请检查网络连接后重试');
-      setIsAnalyzing(false);
-      return;
-    }
-
-    // Handle non-streaming error responses
-    if (!response.ok) {
-      let errorMsg = '分析请求失败';
-      try {
-        const errorBody = await response.json();
-        errorMsg = errorBody.error || errorMsg;
-        if (response.status === 429) {
-          errorMsg = `${errorMsg}（今日免费次数已用完，请升级会员）`;
-        }
-      } catch {
-        errorMsg = `${errorMsg}（${response.status}）`;
-      }
-      setError(errorMsg);
-      setIsAnalyzing(false);
-      return;
-    }
-
-    // Read streaming SSE response
-    try {
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            const content: string = data.choices?.[0]?.delta?.content ?? '';
-            if (content) appendReport(content);
-          } catch {
-            /* skip malformed */
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return;
-      setError('读取分析结果时出错，请重试');
-    } finally {
-      setIsAnalyzing(false);
-    }
+        onComplete: () => {
+          setIsAnalyzing(false);
+        },
+      },
+      controller,
+    );
   }, [
     isAnalyzing,
     scriptContent,
