@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useScriptStore } from '@/store/useScriptStore';
+import { supabase } from '@/lib/supabase';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
@@ -54,12 +55,18 @@ export default function Home() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     let response: Response;
     try {
       response = await fetch('/api/analyze', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           scriptContent,
           modules: selectedModules,

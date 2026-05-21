@@ -486,7 +486,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = getAccessToken(req);
+    // Get token from Authorization header first, then fallback to cookie
+    let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) token = getAccessToken(req);
     if (!token) {
       return NextResponse.json({ error: '未登录，请先登录' }, { status: 401 });
     }
