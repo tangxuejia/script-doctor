@@ -18,9 +18,9 @@ type Preset = {
 };
 
 const PRESETS: Preset[] = [
-  { label: '投稿过审', ids: ['M2', 'M14', 'M16', 'M17'] },
-  { label: '深度诊断', ids: ['M1', 'M2', 'M3', 'M9', 'M14'] },
-  { label: '出海评估', ids: ['M10', 'M14', 'M16'] },
+  { label: '投稿过审', ids: ['M2', 'M18'] },
+  { label: '深度诊断', ids: ['M1', 'M2', 'M3', 'M9', 'M18'] },
+  { label: '出海评估', ids: ['M10', 'M18', 'M16'] },
   { label: '全部模块', ids: MODULES.map(m => m.id) },
 ];
 

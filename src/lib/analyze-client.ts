@@ -18,7 +18,6 @@ function buildSysMsg(modules: string[], prevContext?: string): string {
 interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
-  report?: string;
   platforms?: string[];
 }
 
@@ -91,19 +90,13 @@ export async function analyzeScript(
   callbacks: AnalyzeCallbacks,
   abortController: AbortController,
 ) {
-  const { scriptContent, modules, report } = params;
+  const { scriptContent, modules } = params;
   const { onChunk, onError } = callbacks;
 
   try {
-    const userContent = (() => {
-      const base = report
-        ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
-        : scriptContent;
-      if (params.platforms && params.platforms.length > 0) {
-        return `目标平台：${params.platforms.join('、')}\n\n${base}`;
-      }
-      return base;
-    })();
+    const userContent = params.platforms && params.platforms.length > 0
+      ? `目标平台：${params.platforms.join('、')}\n\n${scriptContent}`
+      : scriptContent;
 
     // ── 分层执行 ──
     const sorted = sortByLayer(modules);
