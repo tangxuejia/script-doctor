@@ -61,7 +61,7 @@ async function readPdfFile(file: File): Promise<string> {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const pageText = content.items
-      .map((item: any) => item.str)
+      .map((item) => (item as { str: string }).str)
       .join(' ');
     texts.push(pageText);
   }

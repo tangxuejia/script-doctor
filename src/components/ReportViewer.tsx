@@ -98,6 +98,8 @@ export default function ReportViewer() {
     [solutions],
   );
 
+  const displayScores = useMemo(() => parseScores(report), [report]);
+
   const copyReport = useCallback(async () => {
     await navigator.clipboard.writeText(report);
     setCopied(true);
@@ -169,7 +171,7 @@ export default function ReportViewer() {
       </div>
 
       {/* ▸ Score cards */}
-      <ScoreCards scores={useMemo(() => parseScores(report), [report])} />
+      <ScoreCards scores={displayScores} />
 
       {/* ▸ Report content */}
       <div className="flex-1 overflow-y-auto">
