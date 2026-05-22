@@ -14,11 +14,6 @@ interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
   report?: string;
-  /** 批次信息：第几批/共几批 */
-  batchNum?: number;
-  batchTotal?: number;
-  /** 剧本总集数 */
-  totalEpisodes?: number;
 }
 
 interface AnalyzeCallbacks {
@@ -47,22 +42,9 @@ export async function analyzeScript(
     }
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
-    const userContent = (() => {
-      const base = scriptContent;
-      if (params.report && params.batchTotal) {
-        // 改写模式 + 分批
-        return `原始剧本（第 ${params.batchNum}/${params.batchTotal} 批，共${params.totalEpisodes || '?'}集）：\n\n${base}\n\n---\n以下是完整的分析报告（仅作参考，请针对本批剧集提取相关建议）：\n\n${params.report.slice(0, 6000)}\n\n**重要：必须输出本批次每一集的完整重写版剧本，格式与原剧本一致（X-Y 集-场格式），严禁只给大纲！**`;
-      }
-      if (params.report) {
-        // 改写模式（单次）
-        return `原始剧本：\n\n${base}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`;
-      }
-      if (params.batchTotal) {
-        // 诊断模式 + 分批
-        return `以下是${params.totalEpisodes || '全'}集剧本的第 ${params.batchNum}/${params.batchTotal} 批（共${params.totalEpisodes || '?'}集）。\n\n**重要：必须对以下每一集进行详细分析，包括具体的场景、对白、人物评价，严禁只给大纲或概述！**\n\n${base}`;
-      }
-      return base;
-    })();
+    const userContent = params.report
+      ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
+      : scriptContent;
 
     const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
       method: 'POST',
