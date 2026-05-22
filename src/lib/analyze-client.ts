@@ -25,6 +25,8 @@ interface AnalyzeParams {
   modules: string[];
   /** Optional analysis report from previous run (for M15 revision mode) */
   report?: string;
+  /** External userId from AuthProvider — skip internal auth check */
+  userId?: string;
 }
 
 interface AnalyzeCallbacks {
@@ -43,25 +45,30 @@ export async function analyzeScript(
 
   try {
     // ── 1. Auth ──
-    // 两层回退：getUser (API验证) → getSession (本地恢复) → 报错
-    let userId: string | undefined;
+    // 如果调用方已提供 userId（来自 AuthProvider），直接使用
+    // 否则走两层回退：getUser (API) → getSession (localStorage) → 报错
+    let userId = params.userId;
     
-    // 第一层：getUser() 直接调 Supabase API，最可靠
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (!userErr && userData.user) {
-      userId = userData.user.id;
-    }
-    
-    // 第二层：getSession() 从内存/localStorage 读取
     if (!userId) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user) {
-        userId = sessionData.session.user.id;
+      // 第一层：getUser() 直接调 Supabase API
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (!userErr && userData.user) {
+        userId = userData.user.id;
+        console.log('[Auth] getUser OK:', userData.user.email);
       }
     }
     
     if (!userId) {
-      console.error('[Auth] getUser error:', userErr);
+      // 第二层：getSession() 从 localStorage 读取
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user) {
+        userId = sessionData.session.user.id;
+        console.log('[Auth] getSession OK:', sessionData.session.user.email);
+      }
+    }
+    
+    if (!userId) {
+      console.error('[Auth] ALL FAILED — 未登录');
       onError('未登录，请先登录');
       return;
     }

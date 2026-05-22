@@ -1,39 +1,111 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
+
+interface AuthState {
+  user: User | null;
+  userId: string | null;
+  email: string | null;
+  loading: boolean;
+  error: string | null;
+}
+
+const AuthContext = createContext<AuthState>({
+  user: null, userId: null, email: null,
+  loading: true, error: null,
+});
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
 /**
- * AuthProvider — 确保 Supabase 认证状态在页面加载后正确初始化。
+ * AuthProvider — 全局认证状态管理。
  *
- * 在静态导出模式（GitHub Pages）下，页面是完全的客户端渲染，
- * Supabase 的 session 需要从 localStorage/cookie 中恢复。
- * onAuthStateChange 监听器确保在 getUser() 被调用前，
- * 客户端已完成认证状态的初始化。
+ * 页面加载时从 localStorage 恢复 Supabase session。
+ * 所有子组件通过 useAuth() 获取当前用户状态。
+ * 这样 analyzeScript 不需要自己调 getUser/getSession。
  */
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const initialized = useRef(false);
+  const [auth, setAuth] = useState<AuthState>({
+    user: null, userId: null, email: null,
+    loading: true, error: null,
+  });
+  const initRef = useRef(false);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
+    if (initRef.current) return;
+    initRef.current = true;
 
-    // 监听认证状态变化，确保 session 被正确加载
+    let cancelled = false;
+
+    async function initAuth() {
+      try {
+        // 先触发 session 从 localStorage 恢复
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (cancelled) return;
+
+        if (session?.user) {
+          setAuth({
+            user: session.user,
+            userId: session.user.id,
+            email: session.user.email ?? null,
+            loading: false,
+            error: null,
+          });
+        } else {
+          setAuth({
+            user: null, userId: null, email: null,
+            loading: false,
+            error: null,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setAuth({
+            user: null, userId: null, email: null,
+            loading: false,
+            error: `认证初始化失败: ${(err as Error).message}`,
+          });
+        }
+      }
+    }
+
+    initAuth();
+
+    // 监听后续认证状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, _session) => {
-        // 认证状态已同步到内存，getUser() 现在可以正常工作
+      (_event, session) => {
+        if (session?.user) {
+          setAuth({
+            user: session.user,
+            userId: session.user.id,
+            email: session.user.email ?? null,
+            loading: false,
+            error: null,
+          });
+        } else {
+          setAuth({
+            user: null, userId: null, email: null,
+            loading: false,
+            error: null,
+          });
+        }
       },
     );
 
-    // 触发初始 session 加载
-    supabase.auth.getSession().catch(() => {
-      // 静默处理 — 用户可能未登录，这是正常的
-    });
-
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <AuthContext.Provider value={auth}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
