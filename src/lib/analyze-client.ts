@@ -103,7 +103,7 @@ export async function analyzeScript(
     const systemMsg = buildSysMsg(modules);
 
     // ── 5. Call DeepSeek ──
-    const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || 'sk-sk-1254b8a706794a0ba5b3f03130084242';
+    const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || 'sk-13444d61573f48bfa722c8195b1dd22e';
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
     const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
