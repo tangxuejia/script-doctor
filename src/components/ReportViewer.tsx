@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScoreItem, useScriptStore } from '@/store/useScriptStore';
 import ScoreCards from './ScoreCards';
 
-/** Parse key scores from markdown report text */
+/* ── Score parsing ── */
 function parseScores(text: string): ScoreItem[] {
   const patterns: { label: string; regex: RegExp }[] = [
     { label: '专业评分', regex: /\*\*专业评分\*\*[：:]\s*(.+)/ },
@@ -24,24 +24,84 @@ function parseScores(text: string): ScoreItem[] {
   return scores;
 }
 
+/* ── Split report into diagnostic and solutions sections ── */
+function splitReport(text: string): { diagnostic: string; solutions: string; hasSolutions: boolean } {
+  const idx = text.indexOf('剧本修改解决方案');
+  if (idx === -1) return { diagnostic: text, solutions: '', hasSolutions: false };
+
+  // Find the heading line that contains this
+  const before = text.slice(0, idx);
+  const solutions = text.slice(idx);
+
+  return { diagnostic: before, solutions, hasSolutions: true };
+}
+
+/* ── Extract comparison blocks from solutions text ── */
+interface CompareBlock {
+  original: string;
+  modified: string;
+  label: string;
+}
+
+function extractComparisons(text: string): { cleaned: string; comparisons: CompareBlock[] } {
+  const comparisons: CompareBlock[] = [];
+  // Match lines with 原内容/原文 followed by 修改后/建议修改 within the next few lines
+  const lines = text.split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    const origMatch = line.match(/^(?:原内容|原文)[：:]\s*(.+)/);
+    if (origMatch) {
+      const original = origMatch[1];
+      // Look for the next "修改后" line
+      let j = i + 1;
+      while (j < lines.length && j < i + 15) {
+        const modMatch = lines[j].trim().match(/^(?:修改后|建议修改|建议)[：:]\s*(.+)/);
+        if (modMatch) {
+          comparisons.push({
+            original,
+            modified: modMatch[1],
+            label: `修改 ${comparisons.length + 1}`,
+          });
+          break;
+        }
+        j++;
+      }
+    }
+    i++;
+  }
+
+  return { cleaned: text, comparisons };
+}
+
+/* ── ReportViewer ── */
 export default function ReportViewer() {
   const { report, isAnalyzing, setScores } = useScriptStore();
   const [copied, setCopied] = useState(false);
+  const solutionsRef = useRef<HTMLDivElement>(null);
 
-  // Parse scores whenever report updates (only when analysis finishes)
-  const scores = useMemo(() => {
+  // Parse scores when analysis finishes
+  useMemo(() => {
     if (!isAnalyzing && report) {
       const s = parseScores(report);
       if (s.length) setScores(s);
-      return s;
     }
-    return [];
   }, [report, isAnalyzing, setScores]);
+
+  const { diagnostic, solutions, hasSolutions } = useMemo(
+    () => splitReport(report),
+    [report],
+  );
+
+  const { comparisons } = useMemo(
+    () => (solutions ? extractComparisons(solutions) : { cleaned: solutions, comparisons: [] as CompareBlock[] }),
+    [solutions],
+  );
 
   const copyReport = useCallback(async () => {
     await navigator.clipboard.writeText(report);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied, 2000);
   }, [report]);
 
   const printReport = useCallback(() => {
@@ -56,6 +116,11 @@ export default function ReportViewer() {
     win.print();
   }, [report]);
 
+  const scrollToSolutions = () => {
+    solutionsRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  /* ── Empty state ── */
   if (!report && !isAnalyzing) {
     return (
       <div className="flex h-full flex-col items-center justify-center text-slate-400">
@@ -70,11 +135,21 @@ export default function ReportViewer() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar */}
+      {/* ▸ Toolbar */}
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-600">
-          {isAnalyzing ? '分析中...' : '分析报告'}
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-medium text-slate-600">
+            {isAnalyzing ? '分析中...' : '分析报告'}
+          </h3>
+          {hasSolutions && (
+            <button
+              onClick={scrollToSolutions}
+              className="rounded-full bg-green-100 px-3 py-0.5 text-xs font-medium text-green-700 hover:bg-green-200 transition-colors"
+            >
+              查看解决方案 ↓
+            </button>
+          )}
+        </div>
         {report && !isAnalyzing && (
           <div className="flex gap-2">
             <button
@@ -93,20 +168,62 @@ export default function ReportViewer() {
         )}
       </div>
 
-      {/* Score cards */}
-      <ScoreCards scores={scores} />
+      {/* ▸ Score cards */}
+      <ScoreCards scores={useMemo(() => parseScores(report), [report])} />
 
-      {/* Report content */}
-      <div className="flex-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-5">
+      {/* ▸ Report content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Loading spinner */}
         {isAnalyzing && !report && (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
             <span className="ml-3 text-sm text-slate-400">AI 正在分析...</span>
           </div>
         )}
-        <div className="prose prose-sm max-w-none prose-headings:text-slate-800 prose-p:text-slate-600 prose-li:text-slate-600 prose-strong:text-slate-700">
-          <ReactMarkdown>{report}</ReactMarkdown>
-        </div>
+
+        {/* Diagnostic part */}
+        {diagnostic && (
+          <div className="prose prose-sm max-w-none prose-headings:text-slate-800 prose-p:text-slate-600 prose-li:text-slate-600 prose-strong:text-slate-700 rounded-xl border border-slate-200 bg-white p-5">
+            <ReactMarkdown>{diagnostic}</ReactMarkdown>
+          </div>
+        )}
+
+        {/* Solutions part (highlighted) */}
+        {hasSolutions && (
+          <>
+            <div ref={solutionsRef} />
+
+            {/* Comparison cards summary */}
+            {comparisons.length > 0 && (
+              <div className="mt-4 grid grid-cols-1 gap-3">
+                {comparisons.map((cmp, i) => (
+                  <div key={i} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">
+                      修改对比 {i + 1}
+                    </div>
+                    <div className="flex divide-x divide-slate-200">
+                      <div className="w-1/2 border-l-4 border-red-300 p-3">
+                        <div className="mb-1 text-[11px] font-medium text-red-400 uppercase tracking-wide">原内容</div>
+                        <div className="text-sm leading-relaxed text-slate-600">{cmp.original}</div>
+                      </div>
+                      <div className="w-1/2 border-l-4 border-green-400 p-3">
+                        <div className="mb-1 text-[11px] font-medium text-green-500 uppercase tracking-wide">修改后</div>
+                        <div className="text-sm leading-relaxed text-slate-600">{cmp.modified}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Full solutions markdown with green background */}
+            <div className="mt-4 rounded-xl border-2 border-green-200 bg-green-50/30 p-5">
+              <div className="prose prose-sm max-w-none prose-headings:text-green-800 prose-p:text-slate-600 prose-li:text-slate-600 prose-strong:text-slate-700">
+                <ReactMarkdown>{solutions}</ReactMarkdown>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
