@@ -8,6 +8,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false, // 静态导出不需要 URL 中检测 session
-    storageKey: 'script-doctor-auth', // 显式指定 storage key
   },
 });
