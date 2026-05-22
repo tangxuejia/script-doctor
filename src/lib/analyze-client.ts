@@ -3,16 +3,24 @@
 import { SYSTEM_PROMPT, MODULE_PROMPTS, getM18Prompt } from './prompts';
 import { MODULE_LAYERS, sortByLayer } from './module-deps';
 
-function buildSysMsg(modules: string[], m18Level?: string, prevContext?: string): string {
+function buildSysMsg(params: {
+  modules: string[];
+  m18Level?: string;
+  platforms?: string[];
+  prevContext?: string;
+}): string {
+  const { modules, m18Level, platforms, prevContext } = params;
+
+  // M18 standalone mode: no diagnostic modules, just generate optimized script
+  if (m18Level && modules.length === 0) {
+    return getM18Prompt(m18Level as 'standard' | 'premium' | 'viral', platforms);
+  }
+
   const extras = modules
-    .filter((m) => m !== 'M18')
     .filter((m) => MODULE_PROMPTS[m])
     .map((m) => MODULE_PROMPTS[m])
     .join('\n\n');
   let msg = extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
-  if (m18Level && modules.includes('M18')) {
-    msg += '\n\n' + getM18Prompt(m18Level as 'standard' | 'premium' | 'viral');
-  }
   if (prevContext) {
     msg += `\n\n## 前置模块分析结果（请基于以下结论分析，不要重复诊断）\n\n${prevContext.slice(0, 6000)}`;
   }
@@ -23,6 +31,7 @@ interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
   platforms?: string[];
+  report?: string;
   m18Level?: 'standard' | 'premium' | 'viral';
 }
 
@@ -99,6 +108,15 @@ export async function analyzeScript(
   const { onChunk, onError } = callbacks;
 
   try {
+    // M18 standalone mode: generate optimized script from report
+    if (params.report && params.m18Level && modules.length === 0) {
+      const userContent = `原始剧本：\n\n${scriptContent}\n\n---\n诊断报告：\n\n${params.report}\n\n请根据以上诊断报告中的建议进行优化改写。`;
+      const sysMsg = buildSysMsg({ modules: [], m18Level: params.m18Level, platforms: params.platforms });
+      const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
+      callbacks.onComplete(output);
+      return;
+    }
+
     const userContent = params.platforms && params.platforms.length > 0
       ? `目标平台：${params.platforms.join('、')}\n\n${scriptContent}`
       : scriptContent;
@@ -125,7 +143,7 @@ export async function analyzeScript(
 
       // Single layer → run now
       if (ordered.length === 1) {
-        const sysMsg = buildSysMsg(layerModules, params.m18Level);
+        const sysMsg = buildSysMsg({ modules: layerModules, m18Level: params.m18Level, platforms: params.platforms });
         const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
         callbacks.onComplete(output);
         return;
@@ -136,7 +154,7 @@ export async function analyzeScript(
         ? allContexts.map(c => c.slice(-2000)).join('\n---\n')
         : undefined;
       onChunk(`\n\n## ${layerName}\n\n`);
-      const sysMsg = buildSysMsg(layerModules, params.m18Level, prevContext);
+      const sysMsg = buildSysMsg({ modules: layerModules, m18Level: params.m18Level, platforms: params.platforms, prevContext });
       const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
       fullOutput += output;
       allContexts.push(output);
