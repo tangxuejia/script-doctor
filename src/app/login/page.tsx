@@ -35,7 +35,7 @@ export default function LoginPage() {
         return;
       }
     } else {
-      const { error: err } = await supabase.auth.signUp({
+      const { data, error: err } = await supabase.auth.signUp({
         email,
         password,
       });
@@ -43,6 +43,13 @@ export default function LoginPage() {
       if (err) {
         setError(err.message);
         setLoading(false);
+        return;
+      }
+
+      // 邮箱确认开启时 signUp 成功但 session 为空
+      if (!data.session && data.user) {
+        setLoading(false);
+        setError('注册成功！请检查邮箱确认链接，然后返回本页登录。\n\n或到 Supabase Dashboard 关闭邮箱确认：Authentication → Settings → Disable email confirmations');
         return;
       }
     }
