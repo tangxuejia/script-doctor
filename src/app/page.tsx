@@ -69,6 +69,7 @@ export default function Home() {
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
+  const diaChunksRef = useRef<string[]>([]); // 诊断每批的报告，改写时精准匹配
   const [revised, setRevised] = useState('');
   const [batchProgress, setBatchProgress] = useState('');
   const abortRef = useRef<AbortController | null>(null);
@@ -137,6 +138,9 @@ export default function Home() {
       for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++) launch();
       while (workers.length > 0) await Promise.race(workers);
 
+      // 保存每批独立报告，改写时精准匹配
+      diaChunksRef.current = results.map(r => r);
+
       for (let i = 0; i < chunks.length; i++) {
         if (isBatch) appendReport(`\n\n===== 第 ${i + 1}/${chunks.length} 批分析 =====\n\n`);
         appendReport(results[i]);
@@ -167,12 +171,14 @@ export default function Home() {
       const queue = chunks.map((_, i) => i);
 
       const runOne = async (idx: number) => {
+        // 匹配对应批次的诊断报告，精准改写
+        const batchReport = diaChunksRef.current[idx] || report;
         await new Promise<void>((resolve, reject) => {
           const ctrl = new AbortController();
           analyzeScript({
             scriptContent: chunks[idx],
             modules: [solutionVersion],
-            report,
+            report: batchReport,
             ...(isBatch ? { batchNum: idx + 1, batchTotal: chunks.length, totalEpisodes } : {}),
           }, {
             onChunk: (c) => { results[idx] += c; },
