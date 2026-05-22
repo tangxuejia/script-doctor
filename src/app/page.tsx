@@ -270,6 +270,14 @@ export default function Home() {
             开始诊断（{wordCount.toLocaleString()} 字）
           </>}
         </button>
+
+        {isAnalyzing && (
+          <button onClick={() => abortRef.current?.abort()}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-all">
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            停止诊断
+          </button>
+        )}
       </section>
 
       {/* Error */}
