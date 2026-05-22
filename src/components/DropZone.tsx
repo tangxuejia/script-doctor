@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { readFileContent } from '@/lib/read-file';
 
 interface Props {
@@ -13,8 +13,6 @@ export default function DropZone({ onFileLoaded }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const cbRef = useRef(onFileLoaded);
-  useEffect(() => { cbRef.current = onFileLoaded; });
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -22,7 +20,8 @@ export default function DropZone({ onFileLoaded }: Props) {
     setErrorMsg('');
     try {
       const content = await readFileContent(file);
-      cbRef.current(content);
+      console.log('[DropZone] read', content.length, 'chars, calling onFileLoaded');
+      onFileLoaded(content);
       setStatus('success');
     } catch (err: unknown) {
       setStatus('error');
