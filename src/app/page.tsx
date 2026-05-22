@@ -98,28 +98,48 @@ export default function Home() {
       ? chunkByEpisodes(scriptContent, 10)
       : [scriptContent];
     const isBatch = chunks.length > 1;
+    const CONCURRENCY = 3;
+    const results: string[] = new Array(chunks.length).fill('');
+    let done = 0;
 
     try {
-      for (let i = 0; i < chunks.length; i++) {
-        if (abortRef.current?.signal.aborted) break;
+      const queue = chunks.map((_, i) => i);
 
-        setBatchProgress(isBatch ? `正在分析第 ${i + 1}/${chunks.length} 批（共${totalEpisodes}集）...` : '');
-        appendReport(isBatch ? `\n\n===== 第 ${i + 1}/${chunks.length} 批分析 =====\n\n` : '');
-
+      const runOne = async (idx: number) => {
         await new Promise<void>((resolve, reject) => {
           const ctrl = new AbortController();
-          abortRef.current = ctrl;
-
           analyzeScript({
-            scriptContent: chunks[i],
+            scriptContent: chunks[idx],
             modules: selectedModules,
-            ...(isBatch ? { batchNum: i + 1, batchTotal: chunks.length, totalEpisodes } : {}),
+            ...(isBatch ? { batchNum: idx + 1, batchTotal: chunks.length, totalEpisodes } : {}),
           }, {
-            onChunk: (c) => appendReport(c),
+            onChunk: (c) => { results[idx] += c; },
             onError: (m) => { reject(new Error(m)); },
             onComplete: () => resolve(),
           }, ctrl);
         });
+        done++;
+        if (isBatch) setBatchProgress(`已完成 ${done}/${chunks.length} 批（共${totalEpisodes}集）`);
+      };
+
+      const workers: Promise<void>[] = [];
+      const launch = () => {
+        if (queue.length === 0) return null;
+        const idx = queue.shift()!;
+        const p = runOne(idx).finally(() => {
+          workers.splice(workers.indexOf(p), 1);
+          launch();
+        });
+        workers.push(p);
+        return p;
+      };
+
+      for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++) launch();
+      while (workers.length > 0) await Promise.race(workers);
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (isBatch) appendReport(`\n\n===== 第 ${i + 1}/${chunks.length} 批分析 =====\n\n`);
+        appendReport(results[i]);
       }
       setIsAnalyzing(false);
       setAnalysisDone(true);
@@ -139,29 +159,49 @@ export default function Home() {
       ? chunkByEpisodes(scriptContent, 10)
       : [scriptContent];
     const isBatch = chunks.length > 1;
+    const CONCURRENCY = 3;
+    const results: string[] = new Array(chunks.length).fill('');
+    let done = 0;
 
     try {
-      for (let i = 0; i < chunks.length; i++) {
-        if (abortRef.current?.signal.aborted) break;
+      const queue = chunks.map((_, i) => i);
 
-        setBatchProgress(isBatch ? `正在改写第 ${i + 1}/${chunks.length} 批（共${totalEpisodes}集）...` : '');
-        setRevised((p) => p + (isBatch ? `\n\n===== 第 ${i + 1}/${chunks.length} 批改写 =====\n\n` : ''));
-
+      const runOne = async (idx: number) => {
         await new Promise<void>((resolve, reject) => {
           const ctrl = new AbortController();
-          abortRef.current = ctrl;
-
           analyzeScript({
-            scriptContent: chunks[i],
+            scriptContent: chunks[idx],
             modules: [solutionVersion],
             report,
-            ...(isBatch ? { batchNum: i + 1, batchTotal: chunks.length, totalEpisodes } : {}),
+            ...(isBatch ? { batchNum: idx + 1, batchTotal: chunks.length, totalEpisodes } : {}),
           }, {
-            onChunk: (c) => setRevised((p) => p + c),
+            onChunk: (c) => { results[idx] += c; },
             onError: (m) => { reject(new Error(m)); },
             onComplete: () => resolve(),
           }, ctrl);
         });
+        done++;
+        if (isBatch) setBatchProgress(`已完成 ${done}/${chunks.length} 批（共${totalEpisodes}集）`);
+      };
+
+      const workers: Promise<void>[] = [];
+      const launch = () => {
+        if (queue.length === 0) return null;
+        const idx = queue.shift()!;
+        const p = runOne(idx).finally(() => {
+          workers.splice(workers.indexOf(p), 1);
+          launch();
+        });
+        workers.push(p);
+        return p;
+      };
+
+      for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++) launch();
+      while (workers.length > 0) await Promise.race(workers);
+
+      for (let i = 0; i < chunks.length; i++) {
+        setRevised((p) => p + (isBatch ? `\n\n===== 第 ${i + 1}/${chunks.length} 批改写 =====\n\n` : ''));
+        setRevised((p) => p + results[i]);
       }
       setRevising(false);
       setBatchProgress('');
