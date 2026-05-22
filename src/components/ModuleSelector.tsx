@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { MODULES, ModuleMeta } from '@/store/modules';
+import { MODULE_DEPENDENCIES, MODULE_NAMES, MODULE_CONFLICTS } from '@/lib/module-deps';
 
 interface Props {
   selected: string[];
@@ -109,6 +110,22 @@ export default function ModuleSelector({ selected, onToggle, disabled, onSelectA
               <div className="min-w-0">
                 <span className={`text-xs font-semibold ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>{m.name}</span>
                 <p className="text-[11px] leading-tight text-gray-400 line-clamp-2 mt-0.5">{m.desc}</p>
+                {/* 依赖标签 */}
+                {MODULE_DEPENDENCIES[m.id] && (
+                  <div className="mt-1 flex flex-wrap gap-0.5">
+                    {MODULE_DEPENDENCIES[m.id].map(depId => {
+                      const depOk = selected.includes(depId);
+                      return (
+                        <span key={depId}
+                          className={`rounded px-1 py-0.5 text-[9px] font-medium ${
+                            depOk ? 'bg-gray-100 text-gray-400' : 'bg-red-50 text-red-500'
+                          }`}>
+                          ↳ {MODULE_NAMES[depId] || depId}{!depOk ? ' ✗' : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </label>
           );

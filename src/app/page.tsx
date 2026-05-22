@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, SolutionVersion, PLATFORMS, Platform } from '@/store/useScriptStore';
 import { MODULES } from '@/store/modules';
 import { analyzeScript } from '@/lib/analyze-client';
+import { findMissingDeps, findAffectedModules, MODULE_CONFLICTS, MODULE_NAMES } from '@/lib/module-deps';
 
 const ALL_MODULE_IDS = MODULES.map(m => m.id);
 import DropZone from '@/components/DropZone';
@@ -40,8 +41,38 @@ export default function Home() {
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revised, setRevised] = useState('');
+  const [depNotice, setDepNotice] = useState(''); // 依赖提示
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
+
+  /** 带依赖感知的模块切换 */
+  const handleToggleModule = useCallback((id: string) => {
+    setDepNotice('');
+    const willSelect = !selectedModules.includes(id);
+
+    if (willSelect) {
+      // 选中 → 自动补齐缺失依赖
+      const deps = findMissingDeps([...selectedModules, id]);
+      const newMods = [...new Set([...selectedModules, id, ...deps])];
+      setSelectedModules(newMods);
+      if (deps.length > 0) {
+        const names = deps.map(d => MODULE_NAMES[d] || d).join('、');
+        setDepNotice(`已自动勾选 ${names}（${id} 依赖此模块）`);
+        setTimeout(() => setDepNotice(''), 5000);
+      }
+    } else {
+      // 取消 → 检查影响
+      const affected = findAffectedModules(id, selectedModules);
+      if (affected.length > 0) {
+        const names = affected.map(d => MODULE_NAMES[d] || d).join('、');
+        if (confirm(`取消 ${MODULE_NAMES[id] || id} 将同时取消依赖它的 ${names}，是否继续？`)) {
+          setSelectedModules(selectedModules.filter(m => m !== id && !affected.includes(m)));
+        }
+      } else {
+        toggleModule(id);
+      }
+    }
+  }, [selectedModules, toggleModule, setSelectedModules]);
 
   // Redundant safety: listen for global file load event
   useEffect(() => {
@@ -173,7 +204,26 @@ export default function Home() {
           <span className="text-xs text-gray-400">（可多选）</span>
         </div>
 
-        <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing}
+        {/* 依赖自动补齐提示 */}
+        {depNotice && (
+          <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-600">
+            {depNotice}
+          </div>
+        )}
+
+        {/* 冲突检测提示 */}
+        {MODULE_CONFLICTS.map(([a, b, msg]) => {
+          if (selectedModules.includes(a) && selectedModules.includes(b)) {
+            return (
+              <div key={`${a}-${b}`} className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-600">
+                ⚠ {MODULE_NAMES[a]} + {MODULE_NAMES[b]}：{msg}
+              </div>
+            );
+          }
+          return null;
+        }).filter(Boolean)}
+
+        <ModuleSelector selected={selectedModules} onToggle={handleToggleModule} disabled={isAnalyzing}
           onSelectAll={(select) => setSelectedModules(select ? ALL_MODULE_IDS : [])}
           onSelectPreset={(ids) => setSelectedModules(ids)}
         />
