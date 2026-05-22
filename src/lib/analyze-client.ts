@@ -23,6 +23,8 @@ function buildSysMsg(modules: string[]): string {
 interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
+  /** Optional analysis report from previous run (for M15 revision mode) */
+  report?: string;
 }
 
 interface AnalyzeCallbacks {
@@ -106,6 +108,10 @@ export async function analyzeScript(
     const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || 'sk-13444d61573f48bfa722c8195b1dd22e';
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
+    const userContent = params.report
+      ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
+      : scriptContent;
+
     const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -116,7 +122,7 @@ export async function analyzeScript(
         model: 'deepseek-chat',
         messages: [
           { role: 'system', content: systemMsg },
-          { role: 'user', content: scriptContent },
+          { role: 'user', content: userContent },
         ],
         stream: true,
         temperature: 0.7,

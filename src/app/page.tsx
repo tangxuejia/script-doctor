@@ -102,7 +102,7 @@ export default function Home() {
     abortRef.current = ctrl;
 
     analyzeScript(
-      { scriptContent, modules: [solutionVersion] },
+      { scriptContent, modules: [solutionVersion], report },
       {
         onChunk: (chunk) => setRevised((p) => p + chunk),
         onError: (msg) => { setError(msg); setRevising(false); },
@@ -110,7 +110,7 @@ export default function Home() {
       },
       ctrl,
     );
-  }, [revising, scriptContent, solutionVersion, setError]);
+  }, [revising, scriptContent, solutionVersion, report, setError]);
 
   const wordCount = scriptContent.length;
 
@@ -185,7 +185,7 @@ export default function Home() {
           {revised && (
             <div className="mt-4 rounded-xl border border-green-200 bg-green-50/20 p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-green-700">修改方案输出</h3>
+                <h3 className="text-sm font-medium text-green-700">优化后剧本</h3>
                 <div className="flex gap-2">
                   <button onClick={() => exportTxt(revised)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-white">TXT</button>
                   <button onClick={() => exportDocx(revised)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-white">Word</button>
