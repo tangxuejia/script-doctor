@@ -27,6 +27,15 @@ function downloadFile(content: string, filename: string, type: string) {
   URL.revokeObjectURL(a.href);
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function downloadWord(content: string, filename: string) {
+  const html = `<html><head><meta charset="utf-8"><style>body{font-family:SimSun;line-height:2;padding:2cm;white-space:pre-wrap}</style></head><body>${escapeHtml(content)}</body></html>`;
+  downloadFile(html, filename, 'application/msword');
+}
+
 type InputTab = 'file' | 'text';
 
 export default function Home() {
@@ -286,6 +295,8 @@ export default function Home() {
                     <span className="text-sm font-bold" style={{ color: M18_LEVELS.find(l => l.key === m18Level)!.color }}>{M18_LEVELS.find(l => l.key === m18Level)!.label}</span>
                     <button onClick={() => downloadFile(generatedScript, `优化剧本.txt`, 'text/plain')}
                       className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">导出 TXT</button>
+                    <button onClick={() => downloadWord(generatedScript, `优化剧本.doc`)}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">导出 Word</button>
                   </div>
                   <div className="prose prose-sm max-w-none max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{generatedScript}</div>
                 </div>
