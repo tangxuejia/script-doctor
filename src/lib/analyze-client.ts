@@ -135,7 +135,7 @@ export async function analyzeScript(
 
       // Multi-layer → accumulate context from all previous layers
       const prevContext = allContexts.length > 0
-        ? allContexts.map((c, j) => c.slice(-2000)).join('\n---\n')
+        ? allContexts.map(c => c.slice(-2000)).join('\n---\n')
         : undefined;
       onChunk(`\n\n## ${layerName}\n\n`);
       const sysMsg = buildSysMsg(layerModules, prevContext);
