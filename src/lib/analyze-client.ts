@@ -43,14 +43,28 @@ export async function analyzeScript(
 
   try {
     // ── 1. Auth ──
-    // getUser() 直接调 Supabase API 验证，利用 cookie 认证
-    // 比 getSession() 更可靠，尤其在静态导出模式（GitHub Pages）下
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
+    // 两层回退：getUser (API验证) → getSession (本地恢复) → 报错
+    let userId: string | undefined;
+    
+    // 第一层：getUser() 直接调 Supabase API，最可靠
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (!userErr && userData.user) {
+      userId = userData.user.id;
+    }
+    
+    // 第二层：getSession() 从内存/localStorage 读取
+    if (!userId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user) {
+        userId = sessionData.session.user.id;
+      }
+    }
+    
+    if (!userId) {
+      console.error('[Auth] getUser error:', userErr);
       onError('未登录，请先登录');
       return;
     }
-    const userId = user.id;
 
     // ── 2. Rate limit ──
     const today = new Date();

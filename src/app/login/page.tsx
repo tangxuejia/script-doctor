@@ -49,8 +49,9 @@ export default function LoginPage() {
       }
     }
 
-    router.push('/');
-    router.refresh();
+    // 静态导出模式下 router.push 可能不触发完整重载
+    // 使用 window.location.replace 确保 Supabase client 完全重新初始化
+    window.location.replace('/script-doctor/');
   };
 
   return (
