@@ -132,13 +132,43 @@ export default function Home() {
 
   const handleRevise = useCallback(async () => {
     if (revising) return;
-    setRevising(true); setRevised(''); setError(null);
-    const ctrl = new AbortController(); abortRef.current = ctrl;
-    analyzeScript({ scriptContent, modules: [solutionVersion], report }, {
-      onChunk: (c) => setRevised((p) => p + c),
-      onError: (m) => { setError(m); setRevising(false); },
-      onComplete: () => setRevising(false),
-    }, ctrl);
+    setRevising(true); setRevised(''); setError(null); setBatchProgress('');
+
+    const totalEpisodes = detectEpisodeCount(scriptContent);
+    const chunks = totalEpisodes > 15
+      ? chunkByEpisodes(scriptContent, 10)
+      : [scriptContent];
+    const isBatch = chunks.length > 1;
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        if (abortRef.current?.signal.aborted) break;
+
+        setBatchProgress(isBatch ? `正在改写第 ${i + 1}/${chunks.length} 批（共${totalEpisodes}集）...` : '');
+        setRevised((p) => p + (isBatch ? `\n\n===== 第 ${i + 1}/${chunks.length} 批改写 =====\n\n` : ''));
+
+        await new Promise<void>((resolve, reject) => {
+          const ctrl = new AbortController();
+          abortRef.current = ctrl;
+
+          analyzeScript({
+            scriptContent: chunks[i],
+            modules: [solutionVersion],
+            report,
+            ...(isBatch ? { batchNum: i + 1, batchTotal: chunks.length, totalEpisodes } : {}),
+          }, {
+            onChunk: (c) => setRevised((p) => p + c),
+            onError: (m) => { reject(new Error(m)); },
+            onComplete: () => resolve(),
+          }, ctrl);
+        });
+      }
+      setRevising(false);
+      setBatchProgress('');
+    } catch (err) {
+      setError((err as Error).message || '改写失败');
+      setRevising(false);
+    }
   }, [revising, scriptContent, solutionVersion, report, setError]);
 
   const ver = VERSIONS.find(v => v.id === solutionVersion)!;
@@ -300,6 +330,14 @@ export default function Home() {
               );
             })}
           </div>
+
+          {/* Batch progress for revision */}
+          {batchProgress && revising && (
+            <div className="mt-4 flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium" style={{ backgroundColor: ver.bg, color: ver.color }}>
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              {batchProgress}
+            </div>
+          )}
 
           <button onClick={handleRevise} disabled={revising}
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed shadow-md active:scale-[0.98]"
