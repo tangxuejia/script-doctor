@@ -9,10 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.1",
     "mammoth": "^1.12.0",
     "next": "14.2.35",
-    "openai": "^6.38.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^18",
     "react-dom": "^18",
@@ -21,7 +19,6 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.15.11",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
     "@types/react": "^18",

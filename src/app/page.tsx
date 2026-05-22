@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, SolutionVersion } from '@/store/useScriptStore';
 import { analyzeScript } from '@/lib/analyze-client';
-import { useAuth } from '@/components/AuthProvider';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
@@ -33,8 +32,6 @@ export default function Home() {
     setIsAnalyzing, appendReport, setError, setSolutionVersion, reset,
   } = useScriptStore();
 
-  const { userId, email, loading: authLoading } = useAuth();
-
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
@@ -56,32 +53,26 @@ export default function Home() {
   const handleAnalyze = useCallback(async () => {
     if (isAnalyzing || !scriptContent.trim() || scriptContent.length < 100) return;
 
-    // 未登录则跳转登录页
-    if (!userId) {
-      window.location.href = '/script-doctor/login';
-      return;
-    }
-
     reset(); setAnalysisDone(false); setRevised('');
     setIsAnalyzing(true); setError(null);
     const ctrl = new AbortController(); abortRef.current = ctrl;
-    analyzeScript({ scriptContent, modules: selectedModules, userId: userId ?? undefined }, {
+    analyzeScript({ scriptContent, modules: selectedModules }, {
       onChunk: (c) => appendReport(c),
       onError: (m) => { setError(m); setIsAnalyzing(false); },
       onComplete: () => { setIsAnalyzing(false); setAnalysisDone(true); },
     }, ctrl);
-  }, [isAnalyzing, scriptContent, selectedModules, appendReport, reset, setError, setIsAnalyzing, userId]);
+  }, [isAnalyzing, scriptContent, selectedModules, appendReport, reset, setError, setIsAnalyzing]);
 
   const handleRevise = useCallback(async () => {
     if (revising) return;
     setRevising(true); setRevised(''); setError(null);
     const ctrl = new AbortController(); abortRef.current = ctrl;
-    analyzeScript({ scriptContent, modules: [solutionVersion], report, userId: userId ?? undefined }, {
+    analyzeScript({ scriptContent, modules: [solutionVersion], report }, {
       onChunk: (c) => setRevised((p) => p + c),
       onError: (m) => { setError(m); setRevising(false); },
       onComplete: () => setRevising(false),
     }, ctrl);
-  }, [revising, scriptContent, solutionVersion, report, setError, userId]);
+  }, [revising, scriptContent, solutionVersion, report, setError]);
 
   const ver = VERSIONS.find(v => v.id === solutionVersion)!;
 
@@ -96,27 +87,6 @@ export default function Home() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-800">Script Doctor</h1>
         <p className="mt-1 text-sm text-gray-400">AI 剧本诊断 · 多维分析 · 智能改写</p>
-
-        {/* Auth status debug */}
-        <div className="mt-3">
-          {authLoading ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400" />
-              检测登录状态...
-            </span>
-          ) : userId ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              已登录：{email}
-            </span>
-          ) : (
-            <a href="/script-doctor/login"
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-600 hover:bg-amber-100 transition-colors">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-              未登录 — 点击登录
-            </a>
-          )}
-        </div>
       </header>
 
       {/* ── Step indicators ── */}
@@ -180,7 +150,7 @@ export default function Home() {
 
         <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
 
-        <button onClick={handleAnalyze} disabled={isAnalyzing || authLoading || scriptContent.length < 100}
+        <button onClick={handleAnalyze} disabled={isAnalyzing || scriptContent.length < 100}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] shadow-md shadow-emerald-200 disabled:opacity-40 disabled:shadow-none">
           {isAnalyzing ? <>
             <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>

@@ -1,16 +1,6 @@
 'use client';
 
-import { supabase } from './supabase';
 import { SYSTEM_PROMPT, MODULE_PROMPTS } from './prompts';
-
-/** SHA-256 hashing in browser via Web Crypto API */
-async function sha256(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 function buildSysMsg(modules: string[]): string {
   const extras = modules
@@ -23,10 +13,7 @@ function buildSysMsg(modules: string[]): string {
 interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
-  /** Optional analysis report from previous run (for M15 revision mode) */
   report?: string;
-  /** External userId from AuthProvider — skip internal auth check */
-  userId?: string;
 }
 
 interface AnalyzeCallbacks {
@@ -44,92 +31,15 @@ export async function analyzeScript(
   const { onChunk, onError } = callbacks;
 
   try {
-    // ── 1. Auth ──
-    // 如果调用方已提供 userId（来自 AuthProvider），直接使用
-    // 否则走两层回退：getUser (API) → getSession (localStorage) → 报错
-    let userId = params.userId;
-    
-    if (!userId) {
-      // 第一层：getUser() 直接调 Supabase API
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (!userErr && userData.user) {
-        userId = userData.user.id;
-        console.log('[Auth] getUser OK:', userData.user.email);
-      }
-    }
-    
-    if (!userId) {
-      // 第二层：getSession() 从 localStorage 读取
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user) {
-        userId = sessionData.session.user.id;
-        console.log('[Auth] getSession OK:', sessionData.session.user.email);
-      }
-    }
-    
-    if (!userId) {
-      console.error('[Auth] ALL FAILED — 未登录');
-      onError('未登录，请先登录');
-      return;
-    }
-
-    // ── 2. Rate limit ──
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const freeLimit = 3;
-
-    const { count: used } = await supabase
-      .from('usage_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('created_at', today.toISOString());
-
-    if ((used ?? 0) >= freeLimit) {
-      onError(`今日免费次数已用完（${freeLimit}/${freeLimit}）。请明天再试。`);
-      return;
-    }
-
-    // ── 3. Cache check ──
-    const scriptHash = await sha256(scriptContent);
-    const modulesKey = [...modules].sort().join(',');
-
-    const { data: cached } = await supabase
-      .from('reports')
-      .select('full_report')
-      .eq('user_id', userId)
-      .eq('script_hash', scriptHash)
-      .eq('modules', modulesKey)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (cached?.full_report) {
-      // Simulate streaming for cached result
-      onChunk(cached.full_report);
-      callbacks.onComplete(cached.full_report);
-      return;
-    }
-
-    // ── 4. Build system prompt dynamically (from module content) ──
-    // Modules are already resolved in page.tsx via MODULE_PROMPTS; 
-    // we rely on the server-side prompt that's already in route.ts.
-    // For browser-side, we'll send the modules to DeepSeek which handles 
-    // the prompt internally. But we need the actual prompts...
-    // 
-    // Since MODULE_PROMPTS and SYSTEM_PROMPT are in route.ts (server-only),
-    // we need them available client-side too.
-    // 
-    // For now, we construct a minimal system message and let the backend
-    // modules be handled by a separate approach.
-    //
-    // ACTUAL FIX: Import prompts from a shared module
-
-    // ── 4. Build system prompt ──
+    // Build system prompt from selected modules
     const systemMsg = buildSysMsg(modules);
 
-    // ── 5. Call DeepSeek ──
+    // DeepSeek API config (injected at build time via NEXT_PUBLIC_*)
     const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
-    if (!DEEPSEEK_KEY) throw new Error('DEEPSEEK_API_KEY not set');
+    if (!DEEPSEEK_KEY) {
+      onError('API Key 未配置，请联系管理员');
+      return;
+    }
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
     const userContent = params.report
@@ -164,7 +74,7 @@ export async function analyzeScript(
       return;
     }
 
-    // ── 6. Stream & collect ──
+    // Stream & collect
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let fullContent = '';
@@ -188,47 +98,9 @@ export async function analyzeScript(
             onChunk(content);
           }
         } catch {
-          /* skip */
+          /* skip malformed chunks */
         }
       }
-    }
-
-    // ── 7. Persist ──
-    try {
-      const tokenEst = Math.ceil(fullContent.length / 3);
-
-      const { data: script } = await supabase
-        .from('scripts')
-        .insert({
-          user_id: userId,
-          title: scriptContent.slice(0, 200).replace(/\n/g, ' ').trim() || '未命名剧本',
-          content: scriptContent,
-          word_count: scriptContent.length,
-        })
-        .select('id')
-        .single();
-
-      const scriptId = script?.id;
-
-      if (scriptId && fullContent) {
-        await supabase.from('reports').insert({
-          script_id: scriptId,
-          user_id: userId,
-          full_report: fullContent,
-          script_hash: scriptHash,
-          modules: modulesKey,
-          token_count: tokenEst,
-        });
-      }
-
-      await supabase.from('usage_logs').insert({
-        user_id: userId,
-        script_id: scriptId ?? null,
-        token_count: tokenEst,
-      });
-    } catch (e) {
-      console.error('Failed to persist:', e);
-      // Non-fatal: analysis already delivered
     }
 
     callbacks.onComplete(fullContent);
