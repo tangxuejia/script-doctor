@@ -53,17 +53,20 @@ function exportPdf(text: string) {
 
 export default function Home() {
   const {
-    scriptContent, selectedModules, isAnalyzing, error, report,
-    solutionVersion, setScriptContent, toggleModule,
+    selectedModules, isAnalyzing, error, report,
+    solutionVersion, toggleModule,
     setIsAnalyzing, appendReport, setError, setSolutionVersion,
     reset,
   } = useScriptStore();
 
+  // Use local state for scriptContent to fix reactivity issue
+  const [scriptContent, setScriptContent] = useState('');
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revised, setRevised] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const wordCount = scriptContent.length;
 
   /* ── 1. Initial analysis ── */
   const handleAnalyze = useCallback(async () => {
@@ -111,8 +114,6 @@ export default function Home() {
       ctrl,
     );
   }, [revising, scriptContent, solutionVersion, report, setError]);
-
-  const wordCount = scriptContent.length;
 
   return (
     <div className="mx-auto min-h-screen max-w-[960px] px-4 py-6">
