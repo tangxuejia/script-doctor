@@ -42,6 +42,7 @@ export default function Home() {
   const [revising, setRevising] = useState(false);
   const [revised, setRevised] = useState('');
   const [depNotice, setDepNotice] = useState(''); // 依赖提示
+  const [depNoticeType, setDepNoticeType] = useState<'info' | 'warn'>('info');
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
 
@@ -57,19 +58,19 @@ export default function Home() {
       setSelectedModules(newMods);
       if (deps.length > 0) {
         const names = deps.map(d => MODULE_NAMES[d] || d).join('、');
+        setDepNoticeType('info');
         setDepNotice(`已自动勾选 ${names}（${id} 依赖此模块）`);
         setTimeout(() => setDepNotice(''), 5000);
       }
     } else {
-      // 取消 → 检查影响
-      const affected = findAffectedModules(id, selectedModules);
+      // 取消 → 直接取消，不强制级联
+      toggleModule(id);
+      const affected = findAffectedModules(id, selectedModules.filter(m => m !== id));
       if (affected.length > 0) {
         const names = affected.map(d => MODULE_NAMES[d] || d).join('、');
-        if (confirm(`取消 ${MODULE_NAMES[id] || id} 将同时取消依赖它的 ${names}，是否继续？`)) {
-          setSelectedModules(selectedModules.filter(m => m !== id && !affected.includes(m)));
-        }
-      } else {
-        toggleModule(id);
+        setDepNoticeType('warn');
+        setDepNotice(`⚠ ${names} 依赖 ${MODULE_NAMES[id] || id}，缺少此模块可能影响分析质量`);
+        setTimeout(() => setDepNotice(''), 6000);
       }
     }
   }, [selectedModules, toggleModule, setSelectedModules]);
@@ -204,9 +205,13 @@ export default function Home() {
           <span className="text-xs text-gray-400">（可多选）</span>
         </div>
 
-        {/* 依赖自动补齐提示 */}
+        {/* 依赖提示 */}
         {depNotice && (
-          <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-600">
+          <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+            depNoticeType === 'warn'
+              ? 'border-amber-200 bg-amber-50 text-amber-700'
+              : 'border-indigo-200 bg-indigo-50 text-indigo-600'
+          }`}>
             {depNotice}
           </div>
         )}
