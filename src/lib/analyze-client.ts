@@ -43,12 +43,14 @@ export async function analyzeScript(
 
   try {
     // ── 1. Auth ──
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
+    // getUser() 直接调 Supabase API 验证，利用 cookie 认证
+    // 比 getSession() 更可靠，尤其在静态导出模式（GitHub Pages）下
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
       onError('未登录，请先登录');
       return;
     }
-    const userId = session.user.id;
+    const userId = user.id;
 
     // ── 2. Rate limit ──
     const today = new Date();
