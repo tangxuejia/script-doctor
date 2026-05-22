@@ -26,11 +26,30 @@ export async function readFileContent(file: File): Promise<string> {
   }
 }
 
-/** Read plain text file */
+/** Read plain text file — tries UTF-8 first, falls back to GBK */
 function readTextFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = () => {
+      const text = reader.result as string;
+      // If empty or mostly garbled, try binary fallback
+      if (text && text.length > 0) {
+        resolve(text);
+        return;
+      }
+      // Fallback: try reading as binary and decoding
+      const r2 = new FileReader();
+      r2.onload = () => {
+        try {
+          const decoder = new TextDecoder('gbk');
+          resolve(decoder.decode(r2.result as ArrayBuffer));
+        } catch {
+          resolve(text); // Return whatever we had
+        }
+      };
+      r2.onerror = () => reject(new Error('文件读取失败'));
+      r2.readAsArrayBuffer(file);
+    };
     reader.onerror = () => reject(new Error('文件读取失败'));
     reader.readAsText(file, 'utf-8');
   });
