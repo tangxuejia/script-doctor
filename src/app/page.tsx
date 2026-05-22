@@ -17,6 +17,40 @@ const VERSIONS = [
 
 type InputTab = 'file' | 'text';
 
+/** 检测剧本总集数 */
+function detectEpisodeCount(content: string): number {
+  const patterns = [/第(\d+)集/g, /^\d+-1\b/gm, /Episode\s+(\d+)/gi];
+  let max = 0;
+  for (const pattern of patterns) {
+    let m;
+    while ((m = pattern.exec(content)) !== null) {
+      max = Math.max(max, parseInt(m[1]));
+    }
+  }
+  return max || 1;
+}
+
+/** 按集数切割剧本，每批约10集 */
+function chunkByEpisodes(content: string, chunkSize = 10): string[] {
+  const epPattern = /(?:^|\n)(第\d+集[^\n]*|Episode\s+\d+[^\n]*)/gim;
+  const matches: RegExpExecArray[] = [];
+  let m;
+  while ((m = epPattern.exec(content)) !== null) {
+    matches.push(m);
+  }
+  if (matches.length <= 1) return [content];
+
+  const indices = matches.map(m => m.index!);
+  const chunks: string[] = [];
+  for (let i = 0; i < indices.length; i += chunkSize) {
+    const start = indices[i];
+    const endIdx = i + chunkSize;
+    const end = endIdx < indices.length ? indices[endIdx] : content.length;
+    chunks.push(content.slice(start, end));
+  }
+  return chunks.length > 0 ? chunks : [content];
+}
+
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type });
   const a = document.createElement('a');
@@ -36,8 +70,11 @@ export default function Home() {
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revised, setRevised] = useState('');
+  const [batchProgress, setBatchProgress] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
+  const episodeCount = detectEpisodeCount(scriptContent);
+  const batchCount = episodeCount > 15 ? Math.ceil(episodeCount / 10) : 1;
 
   // Redundant safety: listen for global file load event
   useEffect(() => {
@@ -53,14 +90,44 @@ export default function Home() {
   const handleAnalyze = useCallback(async () => {
     if (isAnalyzing || !scriptContent.trim() || scriptContent.length < 100) return;
 
-    reset(); setAnalysisDone(false); setRevised('');
+    reset(); setAnalysisDone(false); setRevised(''); setBatchProgress('');
     setIsAnalyzing(true); setError(null);
-    const ctrl = new AbortController(); abortRef.current = ctrl;
-    analyzeScript({ scriptContent, modules: selectedModules }, {
-      onChunk: (c) => appendReport(c),
-      onError: (m) => { setError(m); setIsAnalyzing(false); },
-      onComplete: () => { setIsAnalyzing(false); setAnalysisDone(true); },
-    }, ctrl);
+
+    const totalEpisodes = detectEpisodeCount(scriptContent);
+    const chunks = totalEpisodes > 15
+      ? chunkByEpisodes(scriptContent, 10)
+      : [scriptContent];
+    const isBatch = chunks.length > 1;
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        if (abortRef.current?.signal.aborted) break;
+
+        setBatchProgress(isBatch ? `正在分析第 ${i + 1}/${chunks.length} 批（共${totalEpisodes}集）...` : '');
+        appendReport(isBatch ? `\n\n===== 第 ${i + 1}/${chunks.length} 批分析 =====\n\n` : '');
+
+        await new Promise<void>((resolve, reject) => {
+          const ctrl = new AbortController();
+          abortRef.current = ctrl;
+
+          analyzeScript({
+            scriptContent: chunks[i],
+            modules: selectedModules,
+            ...(isBatch ? { batchNum: i + 1, batchTotal: chunks.length, totalEpisodes } : {}),
+          }, {
+            onChunk: (c) => appendReport(c),
+            onError: (m) => { reject(new Error(m)); },
+            onComplete: () => resolve(),
+          }, ctrl);
+        });
+      }
+      setIsAnalyzing(false);
+      setAnalysisDone(true);
+      setBatchProgress('');
+    } catch (err) {
+      setError((err as Error).message || '分析失败');
+      setIsAnalyzing(false);
+    }
   }, [isAnalyzing, scriptContent, selectedModules, appendReport, reset, setError, setIsAnalyzing]);
 
   const handleRevise = useCallback(async () => {
@@ -132,9 +199,19 @@ export default function Home() {
         }
 
         {scriptContent.length > 0 && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
-            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            已输入 <strong className="text-gray-600">{wordCount.toLocaleString()}</strong> 字
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+            <span className="flex items-center gap-1">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              已输入 <strong className="text-gray-600">{wordCount.toLocaleString()}</strong> 字
+            </span>
+            {episodeCount > 1 && (
+              <span className="flex items-center gap-1">
+                · 检测到 <strong className="text-gray-600">{episodeCount}</strong> 集
+                {batchCount > 1 && (
+                  <span className="text-amber-500">（将分 {batchCount} 批分析）</span>
+                )}
+              </span>
+            )}
             {scriptContent.length >= 100 ? ' ✓ 可分析' : ' ⚠ 至少需要 100 字'}
           </div>
         )}
@@ -149,6 +226,14 @@ export default function Home() {
         </div>
 
         <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
+
+        {/* Batch progress */}
+        {batchProgress && (
+          <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
+            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            {batchProgress}
+          </div>
+        )}
 
         <button onClick={handleAnalyze} disabled={isAnalyzing || scriptContent.length < 100}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] shadow-md shadow-emerald-200 disabled:opacity-40 disabled:shadow-none">

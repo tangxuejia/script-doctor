@@ -14,6 +14,11 @@ interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
   report?: string;
+  /** 批次信息：第几批/共几批 */
+  batchNum?: number;
+  batchTotal?: number;
+  /** 剧本总集数 */
+  totalEpisodes?: number;
 }
 
 interface AnalyzeCallbacks {
@@ -44,7 +49,9 @@ export async function analyzeScript(
 
     const userContent = params.report
       ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
-      : scriptContent;
+      : params.batchTotal
+        ? `以下是${params.totalEpisodes || '全'}集剧本的第 ${params.batchNum}/${params.batchTotal} 批（共${params.totalEpisodes || '?'}集）。\n\n**重要：必须对以下每一集进行详细分析，包括具体的场景、对白、人物评价，严禁只给大纲或概述！**\n\n${scriptContent}`
+        : scriptContent;
 
     const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
       method: 'POST',
@@ -60,7 +67,7 @@ export async function analyzeScript(
         ],
         stream: true,
         temperature: 0.7,
-        max_tokens: 32000,
+        max_tokens: 8000,
       }),
       signal: abortController.signal,
     });
