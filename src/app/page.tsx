@@ -54,7 +54,7 @@ export default function Home() {
     if (willSelect) {
       // 选中 → 自动补齐缺失依赖
       const deps = findMissingDeps([...selectedModules, id]);
-      const newMods = [...new Set([...selectedModules, id, ...deps])];
+      const newMods = Array.from(new Set([...selectedModules, id, ...deps]));
       setSelectedModules(newMods);
       if (deps.length > 0) {
         const names = deps.map(d => MODULE_NAMES[d] || d).join('、');
@@ -107,7 +107,7 @@ export default function Home() {
       setError((err as Error).message || '分析失败');
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing, scriptContent, selectedModules, appendReport, reset, setError, setIsAnalyzing]);
+  }, [isAnalyzing, scriptContent, selectedModules, selectedPlatforms, appendReport, reset, setError, setIsAnalyzing]);
 
   const handleRevise = useCallback(async () => {
     if (revising) return;
@@ -127,7 +127,7 @@ export default function Home() {
       setError((err as Error).message || '改写失败');
       setRevising(false);
     }
-  }, [revising, scriptContent, solutionVersion, report, setError]);
+  }, [revising, scriptContent, solutionVersion, report, selectedPlatforms, setError]);
 
   const ver = VERSIONS.find(v => v.id === solutionVersion)!;
 

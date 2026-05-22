@@ -115,7 +115,7 @@ export async function analyzeScript(
     });
 
     // 同层模块合并为一次调用
-    const ordered = [...layers.entries()].sort(([a], [b]) => a - b);
+    const ordered = Array.from(layers.entries()).sort(([a], [b]) => a - b);
 
     let fullOutput = '';
     let prevContext = '';

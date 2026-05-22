@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { MODULES, ModuleMeta } from '@/store/modules';
-import { MODULE_DEPENDENCIES, MODULE_NAMES, MODULE_CONFLICTS } from '@/lib/module-deps';
+import { MODULE_DEPENDENCIES, MODULE_NAMES } from '@/lib/module-deps';
 
 interface Props {
   selected: string[];
@@ -46,7 +46,7 @@ export default function ModuleSelector({ selected, onToggle, disabled, onSelectA
           allSelected ? 'border-emerald-300 bg-emerald-50 text-emerald-700' :
           'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
         }`}>
-          <input type="checkbox" checked={allSelected} ref={el => el && (el.indeterminate = someSelected)}
+          <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected; }}
             onChange={() => onSelectAll(!allSelected)} disabled={disabled} className="hidden" />
           <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
             allSelected ? 'border-emerald-500 bg-emerald-500' :

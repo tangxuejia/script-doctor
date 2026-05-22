@@ -55,7 +55,7 @@ export function getAllDeps(moduleId: string): string[] {
   const direct = MODULE_DEPENDENCIES[moduleId] || [];
   const all = new Set(direct);
   direct.forEach(d => getAllDeps(d).forEach(a => all.add(a)));
-  return [...all];
+  return Array.from(all);
 }
 
 /**
@@ -68,7 +68,7 @@ export function findMissingDeps(selected: string[]): string[] {
     const deps = getAllDeps(m);
     deps.forEach(d => { if (!selected.includes(d)) missing.add(d); });
   }
-  return [...missing];
+  return Array.from(missing);
 }
 
 /**
