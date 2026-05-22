@@ -28,10 +28,6 @@ function downloadFile(content: string, filename: string, type: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function escapeHtml(text: string): string {
-  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 /** Split report into diagnostic + M18 scripts (if present) */
 function splitM18Scripts(report: string): { diagnostic: string; scripts: Record<string, string>; hasScripts: boolean } {
   const marker = '优化后剧本';
