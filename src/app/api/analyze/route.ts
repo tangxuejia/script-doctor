@@ -669,7 +669,7 @@ export async function POST(req: NextRequest) {
           ],
           stream: true,
           temperature: 0.7,
-          max_tokens: 16000,
+          max_tokens: 32000,
         }),
       });
     } catch {
