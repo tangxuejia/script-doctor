@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
+    "mammoth": "^1.12.0",
     "next": "14.2.35",
     "openai": "^6.38.0",
+    "pdfjs-dist": "^5.7.284",
     "react": "^18",
     "react-dom": "^18",
     "react-dropzone": "^15.0.0",
