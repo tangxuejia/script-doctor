@@ -26,12 +26,12 @@ function downloadFile(content: string, filename: string, type: string) {
 
 export default function Home() {
   const {
+    scriptContent, setScriptContent,
     selectedModules, isAnalyzing, error, report,
     solutionVersion, toggleModule,
     setIsAnalyzing, appendReport, setError, setSolutionVersion, reset,
   } = useScriptStore();
 
-  const [scriptContent, setScriptContent] = useState('');
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
   const [revising, setRevising] = useState(false);
