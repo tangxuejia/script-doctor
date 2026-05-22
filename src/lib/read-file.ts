@@ -26,30 +26,25 @@ export async function readFileContent(file: File): Promise<string> {
   }
 }
 
-/** Read plain text file — auto-detect encoding (UTF-8 / GBK) */
+/** Read plain text — UTF-8/GBK auto-detect by Chinese char count */
 function readTextFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const buf = reader.result as ArrayBuffer;
-      if (buf.byteLength === 0) {
-        resolve('');
-        return;
-      }
-      // Try UTF-8 first
-      const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-      // If contains common Chinese chars, it's probably UTF-8
-      if (/[\u4e00-\u9fff]/.test(utf8)) {
-        resolve(utf8);
-        return;
-      }
-      // Fallback to GBK
-      try {
-        const gbk = new TextDecoder('gbk').decode(buf);
-        resolve(gbk);
-      } catch {
-        resolve(utf8); // GBK failed, return UTF-8 result
-      }
+      if (buf.byteLength === 0) { resolve(''); return; }
+
+      const decUtf8 = new TextDecoder('utf-8', { fatal: false });
+      const decGbk = new TextDecoder('gbk', { fatal: false });
+      const u8 = decUtf8.decode(buf);
+      const gbk = decGbk.decode(buf);
+
+      // 比较：哪个结果中文字多就选哪个
+      const chineseRe = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g;
+      const u8cn = (u8.match(chineseRe) || []).length;
+      const gbkcn = (gbk.match(chineseRe) || []).length;
+
+      resolve(gbkcn > u8cn && gbk.length > 0 ? gbk : u8);
     };
     reader.onerror = () => reject(new Error('文件读取失败'));
     reader.readAsArrayBuffer(file);
