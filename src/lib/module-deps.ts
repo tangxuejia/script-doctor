@@ -28,7 +28,7 @@ export const MODULE_DEPENDENCIES: Record<string, string[]> = {
 export const MODULE_LAYERS: Record<string, number> = {
   M1: 1, M2: 1, M6: 1, M7: 1,   // 诊断层
   M3: 2, M9: 2,                   // 分析层
-  M14: 3, M15: 3, M17: 3,        // 方案层
+  M14: 3, M15: 3, M15_STANDARD: 3, M15_DEEP: 3, M15_REMAKE: 3, M17: 3,        // 方案层
   M10: 4, M11: 4, M12: 4, M13: 4, M16: 4, // 商业化层
   M4: 4, M5: 4, M8: 4,           // 工具类
 };
@@ -51,10 +51,12 @@ export const MODULE_CONFLICTS: [string, string, string][] = [
 /**
  * 获取模块的所有递归依赖（含间接依赖）
  */
-export function getAllDeps(moduleId: string): string[] {
+export function getAllDeps(moduleId: string, visited = new Set<string>()): string[] {
+  if (visited.has(moduleId)) return [];
+  visited.add(moduleId);
   const direct = MODULE_DEPENDENCIES[moduleId] || [];
   const all = new Set(direct);
-  direct.forEach(d => getAllDeps(d).forEach(a => all.add(a)));
+  direct.forEach(d => getAllDeps(d, visited).forEach(a => all.add(a)));
   return Array.from(all);
 }
 

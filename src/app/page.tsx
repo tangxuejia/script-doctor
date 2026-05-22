@@ -5,12 +5,12 @@ import { useScriptStore, SolutionVersion, PLATFORMS, Platform } from '@/store/us
 import { MODULES } from '@/store/modules';
 import { analyzeScript } from '@/lib/analyze-client';
 import { findMissingDeps, findAffectedModules, MODULE_CONFLICTS, MODULE_NAMES } from '@/lib/module-deps';
-
-const ALL_MODULE_IDS = MODULES.map(m => m.id);
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
 import ErrorAlert from '@/components/ErrorAlert';
+
+const ALL_MODULE_IDS = MODULES.map(m => m.id);
 
 /* ── Design Tokens ── */
 const VERSIONS = [
@@ -28,6 +28,10 @@ function downloadFile(content: string, filename: string, type: string) {
   URL.revokeObjectURL(a.href);
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 export default function Home() {
   const {
     scriptContent, setScriptContent,
@@ -43,6 +47,7 @@ export default function Home() {
   const [revised, setRevised] = useState('');
   const [depNotice, setDepNotice] = useState(''); // 依赖提示
   const [depNoticeType, setDepNoticeType] = useState<'info' | 'warn'>('info');
+  const depTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
 
@@ -60,7 +65,8 @@ export default function Home() {
         const names = deps.map(d => MODULE_NAMES[d] || d).join('、');
         setDepNoticeType('info');
         setDepNotice(`已自动勾选 ${names}（${id} 依赖此模块）`);
-        setTimeout(() => setDepNotice(''), 5000);
+        clearTimeout(depTimerRef.current);
+        depTimerRef.current = setTimeout(() => setDepNotice(''), 5000);
       }
     } else {
       // 取消 → 直接取消，不强制级联
@@ -70,15 +76,19 @@ export default function Home() {
         const names = affected.map(d => MODULE_NAMES[d] || d).join('、');
         setDepNoticeType('warn');
         setDepNotice(`⚠ ${names} 依赖 ${MODULE_NAMES[id] || id}，缺少此模块可能影响分析质量`);
-        setTimeout(() => setDepNotice(''), 6000);
+        clearTimeout(depTimerRef.current);
+        depTimerRef.current = setTimeout(() => setDepNotice(''), 6000);
       }
     }
   }, [selectedModules, toggleModule, setSelectedModules]);
 
-  // Debug: 追踪 scriptContent 变化
+  // Cleanup timers on unmount
   useEffect(() => {
-    console.log('[ScriptDoctor] scriptContent length:', scriptContent.length);
-  }, [scriptContent.length]);
+    return () => {
+      clearTimeout(depTimerRef.current);
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const currentStep = !report ? 1 : !analysisDone ? 2 : !revised ? 3 : 4;
 
@@ -343,8 +353,8 @@ export default function Home() {
                 <div className="flex gap-2">
                   {[
                     ['TXT', () => downloadFile(revised, '新剧本.txt', 'text/plain')],
-                    ['Word', () => { const h=`<meta charset="utf-8"><style>body{font-family:SimSun;line-height:2;padding:2cm}</style>${revised.replace(/\n/g,'<br>')}`; downloadFile(h,'新剧本.doc','application/msword') }],
-                    ['PDF', () => { const w=open('','_blank'); if(w){ w.document.write(`<meta charset="utf-8"><title>新剧本</title><style>body{font-family:system-ui;max-width:800px;margin:auto;padding:2rem;line-height:2}</style>${revised.replace(/\n/g,'<br>')}`); w.document.close(); w.print() } }],
+                    ['Word', () => { const h=`<meta charset="utf-8"><style>body{font-family:SimSun;line-height:2;padding:2cm}</style>${escapeHtml(revised).replace(/\n/g,'<br>')}`; downloadFile(h,'新剧本.doc','application/msword') }],
+                    ['PDF', () => { const w=open('','_blank'); if(w){ w.document.write(`<meta charset="utf-8"><title>新剧本</title><style>body{font-family:system-ui;max-width:800px;margin:auto;padding:2rem;line-height:2}</style>${escapeHtml(revised).replace(/\n/g,'<br>')}`); w.document.close(); w.print() } }],
                   ].map(([l, fn]) => (
                     <button key={l as string} onClick={fn as () => void} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">{l as string}</button>
                   ))}

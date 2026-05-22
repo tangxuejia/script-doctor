@@ -118,7 +118,7 @@ export async function analyzeScript(
     const ordered = Array.from(layers.entries()).sort(([a], [b]) => a - b);
 
     let fullOutput = '';
-    let prevContext = '';
+    const allContexts: string[] = [];
 
     for (let i = 0; i < ordered.length; i++) {
       if (abortController.signal.aborted) break;
@@ -133,12 +133,15 @@ export async function analyzeScript(
         return;
       }
 
-      // Multi-layer → layering
+      // Multi-layer → accumulate context from all previous layers
+      const prevContext = allContexts.length > 0
+        ? allContexts.map((c, j) => c.slice(-2000)).join('\n---\n')
+        : undefined;
       onChunk(`\n\n## ${layerName}\n\n`);
       const sysMsg = buildSysMsg(layerModules, prevContext);
       const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
       fullOutput += output;
-      prevContext = output.slice(-4000); // 只传最近 4000 字给下层
+      allContexts.push(output);
     }
 
     callbacks.onComplete(fullOutput);
