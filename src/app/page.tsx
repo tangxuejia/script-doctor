@@ -2,7 +2,10 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, SolutionVersion, PLATFORMS, Platform } from '@/store/useScriptStore';
+import { MODULES } from '@/store/modules';
 import { analyzeScript } from '@/lib/analyze-client';
+
+const ALL_MODULE_IDS = MODULES.map(m => m.id);
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
@@ -30,7 +33,7 @@ export default function Home() {
     selectedModules, isAnalyzing, error, report,
     solutionVersion, toggleModule,
     setIsAnalyzing, appendReport, setError, setSolutionVersion, reset,
-    selectedPlatforms, togglePlatform,
+    selectedPlatforms, togglePlatform, setSelectedModules,
   } = useScriptStore();
 
   const [tab, setTab] = useState<InputTab>('file');
@@ -170,7 +173,10 @@ export default function Home() {
           <span className="text-xs text-gray-400">（可多选）</span>
         </div>
 
-        <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
+        <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing}
+          onSelectAll={(select) => setSelectedModules(select ? ALL_MODULE_IDS : [])}
+          onSelectPreset={(ids) => setSelectedModules(ids)}
+        />
 
         {/* M16/M17 平台选择器 */}
         {(selectedModules.includes('M16') || selectedModules.includes('M17')) && (
