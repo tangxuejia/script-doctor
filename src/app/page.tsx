@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, SolutionVersion } from '@/store/useScriptStore';
 import { analyzeScript } from '@/lib/analyze-client';
 import DropZone from '@/components/DropZone';
@@ -38,6 +38,16 @@ export default function Home() {
   const [revised, setRevised] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
+
+  // Redundant safety: listen for global file load event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const content = (e as CustomEvent).detail as string;
+      if (content) setScriptContent(content);
+    };
+    window.addEventListener('script:loaded', handler);
+    return () => window.removeEventListener('script:loaded', handler);
+  }, [setScriptContent]);
   const currentStep = !report ? 1 : !analysisDone ? 2 : !revised ? 3 : 4;
 
   const handleAnalyze = useCallback(async () => {

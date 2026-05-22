@@ -20,8 +20,9 @@ export default function DropZone({ onFileLoaded }: Props) {
     setErrorMsg('');
     try {
       const content = await readFileContent(file);
-      console.log('[DropZone] read', content.length, 'chars, calling onFileLoaded');
+      // Both direct callback AND global event for redundancy
       onFileLoaded(content);
+      window.dispatchEvent(new CustomEvent('script:loaded', { detail: content }));
       setStatus('success');
     } catch (err: unknown) {
       setStatus('error');
