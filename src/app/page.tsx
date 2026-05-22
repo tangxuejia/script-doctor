@@ -16,7 +16,7 @@ const ALL_MODULE_IDS = MODULES.map(m => m.id);
 const M18_LEVELS = [
   { key: 'standard' as const, label: '标准优化版', desc: '基础过稿', color: '#10b981', bg: '#ecfdf5' },
   { key: 'premium' as const, label: '精品优化版', desc: '冲击高评级', color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'viral' as const, label: '🔥 爆款优化版', desc: '冲击顶级流量', color: '#f59e0b', bg: '#fffbeb' },
+  { key: 'remake' as const, label: '★ 重塑版', desc: '行业标杆', color: '#8b5cf6', bg: '#f5f3ff' },
 ];
 type M18Level = typeof M18_LEVELS[number]['key'];
 

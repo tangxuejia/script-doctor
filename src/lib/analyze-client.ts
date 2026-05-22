@@ -5,7 +5,7 @@ import { MODULE_LAYERS, sortByLayer } from './module-deps';
 
 function buildSysMsg(params: {
   modules: string[];
-  m18Level?: string;
+  m18Level?: 'standard' | 'premium' | 'remake';
   platforms?: string[];
   prevContext?: string;
 }): string {
@@ -13,7 +13,7 @@ function buildSysMsg(params: {
 
   // M18 standalone mode: no diagnostic modules, just generate optimized script
   if (m18Level && modules.length === 0) {
-    return getM18Prompt(m18Level as 'standard' | 'premium' | 'viral', platforms);
+    return getM18Prompt(m18Level, platforms);
   }
 
   const extras = modules
@@ -32,7 +32,7 @@ interface AnalyzeParams {
   modules: string[];
   platforms?: string[];
   report?: string;
-  m18Level?: 'standard' | 'premium' | 'viral';
+  m18Level?: 'standard' | 'premium' | 'remake';
 }
 
 interface AnalyzeCallbacks {
