@@ -76,7 +76,7 @@ function extractComparisons(text: string): { cleaned: string; comparisons: Compa
 
 /* ── ReportViewer ── */
 export default function ReportViewer() {
-  const { report, isAnalyzing, setScores } = useScriptStore();
+  const { report, isAnalyzing, setScores, solutionVersion } = useScriptStore();
   const [copied, setCopied] = useState(false);
   const solutionsRef = useRef<HTMLDivElement>(null);
 
@@ -189,9 +189,23 @@ export default function ReportViewer() {
         )}
 
         {/* Solutions part (highlighted) */}
-        {hasSolutions && (
+        {hasSolutions && (() => {
+          // Version color scheme
+          const verColors: Record<string, { border: string; bg: string; badge: string; heading: string; label: string }> = {
+            'M15_STANDARD': { border: 'border-orange-300', bg: 'bg-orange-50/30', badge: 'bg-orange-500 text-white', heading: 'text-orange-700', label: '🏗️ 标准版修改方案' },
+            'M15_DEEP':    { border: 'border-blue-300',  bg: 'bg-blue-50/30',  badge: 'bg-blue-500 text-white',  heading: 'text-blue-700',  label: '🔧 深度版修改方案' },
+            'M15_REMAKE':  { border: 'border-amber-300', bg: 'bg-amber-50/30', badge: 'bg-amber-500 text-white', heading: 'text-amber-700', label: '🏆 精品重塑方案' },
+          };
+          const vc = verColors[solutionVersion] || verColors['M15_STANDARD'];
+
+          return (
           <>
             <div ref={solutionsRef} />
+
+            {/* Version badge */}
+            <div className={`mt-4 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${vc.badge}`}>
+              {vc.label}
+            </div>
 
             {/* Comparison cards summary */}
             {comparisons.length > 0 && (
@@ -216,14 +230,18 @@ export default function ReportViewer() {
               </div>
             )}
 
-            {/* Full solutions markdown with green background */}
-            <div className="mt-4 rounded-xl border-2 border-green-200 bg-green-50/30 p-5">
-              <div className="prose prose-sm max-w-none prose-headings:text-green-800 prose-p:text-slate-600 prose-li:text-slate-600 prose-strong:text-slate-700">
+            {/* Full solutions markdown with version-colored background */}
+            <div className={`mt-4 rounded-xl border-2 ${vc.border} ${vc.bg} p-5`}>
+              <div className={`prose prose-sm max-w-none prose-p:text-slate-600 prose-li:text-slate-600 prose-strong:text-slate-700
+                ${solutionVersion === 'M15_DEEP' ? '[&_h2]:text-blue-700 [&_h3]:text-blue-700' :
+                  solutionVersion === 'M15_REMAKE' ? '[&_h2]:text-amber-600 [&_h3]:text-amber-600' :
+                  '[&_h2]:text-orange-600 [&_h3]:text-orange-600'}`}>
                 <ReactMarkdown>{solutions}</ReactMarkdown>
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ export interface ScoreItem {
   value: string;
 }
 
+export type SolutionVersion = 'M15_STANDARD' | 'M15_DEEP' | 'M15_REMAKE';
+
 interface ScriptState {
   scriptContent: string;
   selectedModules: string[];
@@ -14,6 +16,7 @@ interface ScriptState {
   report: string;
   error: string | null;
   scores: ScoreItem[];
+  solutionVersion: SolutionVersion;
 
   setScriptContent: (content: string) => void;
   setSelectedModules: (modules: string[]) => void;
@@ -22,6 +25,7 @@ interface ScriptState {
   appendReport: (chunk: string) => void;
   setError: (error: string | null) => void;
   setScores: (scores: ScoreItem[]) => void;
+  setSolutionVersion: (v: SolutionVersion) => void;
   reset: () => void;
 }
 
@@ -32,6 +36,7 @@ export const useScriptStore = create<ScriptState>((set) => ({
   report: '',
   error: null,
   scores: [],
+  solutionVersion: 'M15_STANDARD',
 
   setScriptContent: (content) => set({ scriptContent: content }),
 
@@ -52,6 +57,8 @@ export const useScriptStore = create<ScriptState>((set) => ({
   setError: (error) => set({ error }),
 
   setScores: (scores) => set({ scores }),
+
+  setSolutionVersion: (v) => set({ solutionVersion: v }),
 
   reset: () =>
     set({

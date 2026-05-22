@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { useScriptStore } from '@/store/useScriptStore';
+import { useScriptStore, SolutionVersion } from '@/store/useScriptStore';
 import { analyzeScript } from '@/lib/analyze-client';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
@@ -17,11 +17,13 @@ export default function Home() {
     selectedModules,
     isAnalyzing,
     error,
+    solutionVersion,
     setScriptContent,
     toggleModule,
     setIsAnalyzing,
     appendReport,
     setError,
+    setSolutionVersion,
     reset,
   } = useScriptStore();
 
@@ -56,7 +58,7 @@ export default function Home() {
     abortRef.current = controller;
 
     analyzeScript(
-      { scriptContent, modules: selectedModules },
+      { scriptContent, modules: [...selectedModules, solutionVersion] },
       {
         onChunk: (chunk) => appendReport(chunk),
         onError: (errMsg) => {
@@ -73,6 +75,7 @@ export default function Home() {
     isAnalyzing,
     scriptContent,
     selectedModules,
+    solutionVersion,
     setIsAnalyzing,
     appendReport,
     setError,
@@ -135,6 +138,53 @@ export default function Home() {
             onToggle={toggleModule}
             disabled={isAnalyzing}
           />
+
+          {/* Solution version selector */}
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <span className="text-sm font-medium text-slate-600">
+              选择修改方案版本（三选一）
+            </span>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {([
+                { id: 'M15_STANDARD' as SolutionVersion, label: '标准版', desc: '对白打磨 + 细节优化 + 钩子强化，不改结构', color: 'orange', icon: '' },
+                { id: 'M15_DEEP' as SolutionVersion, label: '深度版', desc: '结构调整 + 人物深化 + 新增场景', color: 'blue', icon: '' },
+                { id: 'M15_REMAKE' as SolutionVersion, label: '重塑版', desc: '立意升级 + 人物关系重构 + 叙事结构重塑', color: 'amber', icon: '🏆' },
+              ] as const).map((v) => {
+                const selected = solutionVersion === v.id;
+                const colors: Record<string, { border: string; bg: string; badge: string; text: string }> = {
+                  orange: { border: 'border-orange-400', bg: 'bg-orange-50', badge: 'bg-orange-500', text: 'text-orange-600' },
+                  blue: { border: 'border-blue-400', bg: 'bg-blue-50', badge: 'bg-blue-500', text: 'text-blue-600' },
+                  amber: { border: 'border-amber-400', bg: 'bg-amber-50', badge: 'bg-amber-500', text: 'text-amber-600' },
+                };
+                const c = colors[v.color];
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setSolutionVersion(v.id)}
+                    disabled={isAnalyzing}
+                    className={`flex flex-col items-center rounded-lg border-2 p-2.5 text-left transition-all disabled:opacity-50 ${
+                      selected
+                        ? `${c.border} ${c.bg}`
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      {v.icon && <span className="text-sm">{v.icon}</span>}
+                      <span className={`text-xs font-semibold ${selected ? c.text : 'text-slate-600'}`}>
+                        {v.label}
+                      </span>
+                      {selected && (
+                        <div className={`ml-auto h-3 w-3 rounded-full ${c.badge}`} />
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] leading-tight text-slate-400">
+                      {v.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Analyze button */}
           <button
