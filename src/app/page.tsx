@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, PLATFORMS, Platform } from '@/store/useScriptStore';
 import { MODULES } from '@/store/modules';
 import { analyzeScript } from '@/lib/analyze-client';
@@ -103,7 +103,7 @@ export default function Home() {
       setError((err as Error).message || '分析失败');
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing, scriptContent, selectedModules, selectedPlatforms, appendReport, reset, setError, setIsAnalyzing]);
+  }, [isAnalyzing, scriptContent, selectedModules, selectedPlatforms, m18Level, appendReport, reset, setError, setIsAnalyzing]);
 
   return (
     <div className="mx-auto min-h-screen max-w-[960px] px-4 py-8">
