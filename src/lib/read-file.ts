@@ -26,32 +26,33 @@ export async function readFileContent(file: File): Promise<string> {
   }
 }
 
-/** Read plain text file — tries UTF-8 first, falls back to GBK */
+/** Read plain text file — auto-detect encoding (UTF-8 / GBK) */
 function readTextFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const text = reader.result as string;
-      // If empty or mostly garbled, try binary fallback
-      if (text && text.length > 0) {
-        resolve(text);
+      const buf = reader.result as ArrayBuffer;
+      if (buf.byteLength === 0) {
+        resolve('');
         return;
       }
-      // Fallback: try reading as binary and decoding
-      const r2 = new FileReader();
-      r2.onload = () => {
-        try {
-          const decoder = new TextDecoder('gbk');
-          resolve(decoder.decode(r2.result as ArrayBuffer));
-        } catch {
-          resolve(text); // Return whatever we had
-        }
-      };
-      r2.onerror = () => reject(new Error('文件读取失败'));
-      r2.readAsArrayBuffer(file);
+      // Try UTF-8 first
+      const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      // If contains common Chinese chars, it's probably UTF-8
+      if (/[\u4e00-\u9fff]/.test(utf8)) {
+        resolve(utf8);
+        return;
+      }
+      // Fallback to GBK
+      try {
+        const gbk = new TextDecoder('gbk').decode(buf);
+        resolve(gbk);
+      } catch {
+        resolve(utf8); // GBK failed, return UTF-8 result
+      }
     };
     reader.onerror = () => reject(new Error('文件读取失败'));
-    reader.readAsText(file, 'utf-8');
+    reader.readAsArrayBuffer(file);
   });
 }
 

@@ -21,17 +21,11 @@ export default function DropZone({ onFileLoaded }: Props) {
     setErrorMsg('');
     setWordCount(0);
     try {
-      // 诊断：检测文件对象是否有效
-      if (file.size === 0) {
-        setErrorMsg(`文件大小为 0 字节（文件名: ${file.name}）。可能是浏览器安全限制或文件系统问题，请尝试换用拖拽方式上传。`);
-        setStatus('error');
-        return;
-      }
       const content = await readFileContent(file);
       onFileLoaded(content);
       setWordCount(content.length);
       if (!content || !content.trim()) {
-        setErrorMsg(`文件读取成功但内容为空（${file.size} 字节，${content.length} 字符，类型 .${file.name.split('.').pop()}）。可能是编码问题，请确认文件编码为 UTF-8。`);
+        setErrorMsg(`文件内容为空（${file.size} 字节 → ${content.length} 字符，类型 .${file.name.split('.').pop()}）。请确认文件确实包含文字内容。`);
         setStatus('error');
       } else {
         setStatus('success');
