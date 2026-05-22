@@ -132,59 +132,83 @@ export default function Home() {
             <TextInput value={scriptContent} onChange={setScriptContent} />
           )}
 
-          {/* Module selector */}
-          <ModuleSelector
-            selected={selectedModules}
-            onToggle={toggleModule}
-            disabled={isAnalyzing}
-          />
-
-          {/* Solution version selector */}
-          <div className="mt-4 border-t border-slate-200 pt-4">
-            <span className="text-sm font-medium text-slate-600">
+          {/* Solution version selector — top priority */}
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+            <span className="mb-3 block text-sm font-semibold text-slate-700">
               选择修改方案版本（三选一）
             </span>
-            <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {([
-                { id: 'M15_STANDARD' as SolutionVersion, label: '标准版', desc: '对白打磨 + 细节优化 + 钩子强化，不改结构', color: 'orange', icon: '' },
-                { id: 'M15_DEEP' as SolutionVersion, label: '深度版', desc: '结构调整 + 人物深化 + 新增场景', color: 'blue', icon: '' },
-                { id: 'M15_REMAKE' as SolutionVersion, label: '重塑版', desc: '立意升级 + 人物关系重构 + 叙事结构重塑', color: 'amber', icon: '🏆' },
-              ] as const).map((v) => {
+                {
+                  id: 'M15_STANDARD' as SolutionVersion,
+                  label: '标准版',
+                  emoji: '🟠',
+                  desc: '快速打磨',
+                  sub: '不改结构',
+                  color: 'orange' as const,
+                },
+                {
+                  id: 'M15_DEEP' as SolutionVersion,
+                  label: '深度版',
+                  emoji: '🔵',
+                  desc: '结构优化',
+                  sub: '冲击精品',
+                  color: 'blue' as const,
+                },
+                {
+                  id: 'M15_REMAKE' as SolutionVersion,
+                  label: '重塑版',
+                  emoji: '🟡🏆',
+                  desc: '全面重塑',
+                  sub: '冲击S+级',
+                  color: 'amber' as const,
+                },
+              ]).map((v) => {
                 const selected = solutionVersion === v.id;
-                const colors: Record<string, { border: string; bg: string; badge: string; text: string }> = {
-                  orange: { border: 'border-orange-400', bg: 'bg-orange-50', badge: 'bg-orange-500', text: 'text-orange-600' },
-                  blue: { border: 'border-blue-400', bg: 'bg-blue-50', badge: 'bg-blue-500', text: 'text-blue-600' },
-                  amber: { border: 'border-amber-400', bg: 'bg-amber-50', badge: 'bg-amber-500', text: 'text-amber-600' },
-                };
-                const c = colors[v.color];
+                const c = {
+                  orange: { border: 'border-orange-400', bg: 'bg-orange-50', dot: 'bg-orange-500', text: 'text-orange-700', ring: 'ring-orange-200' },
+                  blue:   { border: 'border-blue-400',   bg: 'bg-blue-50',   dot: 'bg-blue-500',   text: 'text-blue-700',   ring: 'ring-blue-200' },
+                  amber:  { border: 'border-amber-400',  bg: 'bg-amber-50',  dot: 'bg-amber-500',  text: 'text-amber-700',  ring: 'ring-amber-200' },
+                }[v.color];
                 return (
                   <button
                     key={v.id}
                     onClick={() => setSolutionVersion(v.id)}
                     disabled={isAnalyzing}
-                    className={`flex flex-col items-center rounded-lg border-2 p-2.5 text-left transition-all disabled:opacity-50 ${
+                    className={`flex flex-col items-center rounded-xl border-2 p-3 text-center transition-all disabled:opacity-50 ${
                       selected
-                        ? `${c.border} ${c.bg}`
+                        ? `${c.border} ${c.bg} ${c.ring} ring-2`
                         : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-1">
-                      {v.icon && <span className="text-sm">{v.icon}</span>}
-                      <span className={`text-xs font-semibold ${selected ? c.text : 'text-slate-600'}`}>
-                        {v.label}
+                    <span className="text-xl">{v.emoji}</span>
+                    <span className={`mt-1 text-sm font-bold ${selected ? c.text : 'text-slate-700'}`}>
+                      {v.label}
+                    </span>
+                    <span className="text-xs text-slate-500">{v.desc}</span>
+                    <span className="text-[11px] text-slate-400">{v.sub}</span>
+                    {selected && (
+                      <span className={`mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${c.dot}`}>
+                        ✓ 已选
                       </span>
-                      {selected && (
-                        <div className={`ml-auto h-3 w-3 rounded-full ${c.badge}`} />
-                      )}
-                    </div>
-                    <p className="mt-1 text-[11px] leading-tight text-slate-400">
-                      {v.desc}
-                    </p>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Other analysis modules — below version selector */}
+          <div className="mb-1 flex items-center gap-3">
+            <div className="flex-1 border-t border-slate-200" />
+            <span className="text-xs font-medium text-slate-400">其他分析模块（可多选）</span>
+            <div className="flex-1 border-t border-slate-200" />
+          </div>
+          <ModuleSelector
+            selected={selectedModules}
+            onToggle={toggleModule}
+            disabled={isAnalyzing}
+          />
 
           {/* Analyze button */}
           <button
