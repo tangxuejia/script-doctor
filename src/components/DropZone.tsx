@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { readFileContent } from '@/lib/read-file';
 
@@ -14,9 +14,11 @@ export default function DropZone({ onFileLoaded }: Props) {
   const [status, setStatus] = useState<Status>('idle');
   const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const onFileLoadedRef = useRef(onFileLoaded);
+  useEffect(() => { onFileLoadedRef.current = onFileLoaded; }, [onFileLoaded]);
 
-  const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (!file) return;
 
@@ -26,18 +28,13 @@ export default function DropZone({ onFileLoaded }: Props) {
 
       try {
         const content = await readFileContent(file);
-        onFileLoaded(content);
+        onFileLoadedRef.current(content);
         setStatus('success');
       } catch (err: unknown) {
         setStatus('error');
         setErrorMsg((err as Error).message || '文件读取失败');
       }
     },
-    [onFileLoaded],
-  );
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
     accept: {
       'text/plain': ['.txt'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
