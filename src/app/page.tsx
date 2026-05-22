@@ -12,58 +12,20 @@ import ErrorAlert from '@/components/ErrorAlert';
 
 const ALL_MODULE_IDS = MODULES.map(m => m.id);
 
-/* ── M18 version tabs ── */
-const M18_TABS = [
-  { key: 'standard', label: '标准优化版', color: '#10b981', bg: '#ecfdf5', icon: '✦' },
-  { key: 'premium', label: '精品优化版', color: '#3b82f6', bg: '#eff6ff', icon: '◆' },
-  { key: 'viral', label: '🔥 爆款优化版', color: '#f59e0b', bg: '#fffbeb', icon: '★' },
-] as const;
+/* ── M18 level selector ── */
+const M18_LEVELS = [
+  { key: 'standard' as const, label: '标准优化版', desc: '基础过稿', color: '#10b981', bg: '#ecfdf5' },
+  { key: 'premium' as const, label: '精品优化版', desc: '冲击高评级', color: '#3b82f6', bg: '#eff6ff' },
+  { key: 'viral' as const, label: '🔥 爆款优化版', desc: '冲击顶级流量', color: '#f59e0b', bg: '#fffbeb' },
+];
 
-type M18Tab = typeof M18_TABS[number]['key'];
+type M18Level = typeof M18_LEVELS[number]['key'];
 
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = filename; a.click();
   URL.revokeObjectURL(a.href);
-}
-
-/** Split report into diagnostic + M18 scripts (if present) */
-function splitM18Scripts(report: string): { diagnostic: string; scripts: Record<string, string>; hasScripts: boolean } {
-  const marker = '优化后剧本';
-  const idx = report.indexOf(marker);
-  if (idx === -1) return { diagnostic: report, scripts: {}, hasScripts: false };
-
-  const diagnostic = report.slice(0, idx).trimEnd();
-  const scriptsText = report.slice(idx);
-  const scripts: Record<string, string> = {};
-
-  // Match each version section: "1. 标准优化版剧本" or "标准优化版剧本"
-  const patterns: [string, string][] = [
-    ['标准优化版', 'standard'],
-    ['精品优化版', 'premium'],
-    ['爆款优化版', 'viral'],
-  ];
-
-  for (const [label, key] of patterns) {
-    const startRe = new RegExp(`(?:\\d+\\.\\s*)?${label}剧本`);
-    const startIdx = scriptsText.search(startRe);
-    if (startIdx === -1) continue;
-
-    // Find next version marker or end
-    let endIdx = scriptsText.length;
-    for (const [otherLabel] of patterns) {
-      if (otherLabel === label) continue;
-      const otherRe = new RegExp(`(?:\\d+\\.\\s*)?${otherLabel}剧本`);
-      const otherIdx = scriptsText.slice(startIdx + 1).search(otherRe);
-      if (otherIdx !== -1 && startIdx + 1 + otherIdx < endIdx) {
-        endIdx = startIdx + 1 + otherIdx;
-      }
-    }
-    scripts[key] = scriptsText.slice(startIdx, endIdx).trim();
-  }
-
-  return { diagnostic, scripts, hasScripts: Object.keys(scripts).length > 0 };
 }
 
 type InputTab = 'file' | 'text';
@@ -81,7 +43,7 @@ export default function Home() {
   const [analysisDone, setAnalysisDone] = useState(false);
   const [depNotice, setDepNotice] = useState('');
   const [depNoticeType, setDepNoticeType] = useState<'info' | 'warn'>('info');
-  const [m18Tab, setM18Tab] = useState<M18Tab>('standard');
+  const [m18Level, setM18Level] = useState<M18Level>('standard');
   const depTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
@@ -129,7 +91,7 @@ export default function Home() {
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
       await new Promise<void>((resolve, reject) => {
-        analyzeScript({ scriptContent, modules: selectedModules, platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined }, {
+        analyzeScript({ scriptContent, modules: selectedModules, platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined, m18Level: selectedModules.includes('M18') ? m18Level : undefined }, {
           onChunk: (c) => appendReport(c),
           onError: (m) => { reject(new Error(m)); },
           onComplete: () => resolve(),
@@ -142,10 +104,6 @@ export default function Home() {
       setIsAnalyzing(false);
     }
   }, [isAnalyzing, scriptContent, selectedModules, selectedPlatforms, appendReport, reset, setError, setIsAnalyzing]);
-
-  const { diagnostic, scripts, hasScripts } = useMemo(() => splitM18Scripts(report), [report]);
-
-  const activeTab = M18_TABS.find(t => t.key === m18Tab)!;
 
   return (
     <div className="mx-auto min-h-screen max-w-[960px] px-4 py-8">
@@ -260,6 +218,28 @@ export default function Home() {
           </div>
         )}
 
+        {/* M18 级别选择器 */}
+        {selectedModules.includes('M18') && (
+          <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+            <div className="mb-2 text-xs font-medium text-emerald-600">选择优化级别</div>
+            <div className="grid grid-cols-3 gap-2">
+              {M18_LEVELS.map((l) => {
+                const sel = m18Level === l.key;
+                return (
+                  <button key={l.key} onClick={() => setM18Level(l.key)} disabled={isAnalyzing}
+                    className={`rounded-lg px-3 py-2 text-center text-xs font-medium transition-all ${
+                      sel ? 'ring-2 shadow-sm' : 'border border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                    style={sel ? { backgroundColor: l.bg, borderColor: l.color, color: l.color } : undefined}>
+                    <div>{l.label}</div>
+                    <div className="text-[10px] opacity-60 mt-0.5">{l.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <button onClick={handleAnalyze} disabled={isAnalyzing || scriptContent.length < 100}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] shadow-md shadow-emerald-200 disabled:opacity-40 disabled:shadow-none">
           {isAnalyzing ? <>
@@ -301,47 +281,8 @@ export default function Home() {
             )}
           </div>
 
-          {/* Diagnostic part */}
-          <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-strong:text-gray-700 max-h-[500px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{diagnostic}</div>
-
-          {/* ── M18 three-version tabs ── */}
-          {hasScripts && (
-            <div className="mt-6 rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-white to-emerald-50/30 p-5">
-              <h3 className="mb-3 text-sm font-semibold text-gray-800">优化后剧本</h3>
-
-              {/* Tab switcher */}
-              <div className="mb-4 flex rounded-lg bg-gray-100 p-1">
-                {M18_TABS.map((t) => {
-                  const sel = m18Tab === t.key;
-                  return (
-                    <button key={t.key} onClick={() => setM18Tab(t.key)}
-                      className={`flex-1 rounded-md py-2 text-xs font-medium transition-all ${
-                        sel ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                      }`}>
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Active version */}
-              {scripts[m18Tab] && (
-                <div className="rounded-xl border p-4" style={{ borderColor: activeTab.color, backgroundColor: activeTab.bg }}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-bold" style={{ color: activeTab.color }}>{activeTab.label}</span>
-                    <button
-                      onClick={() => downloadFile(scripts[m18Tab], `${activeTab.label}.txt`, 'text/plain')}
-                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
-                      复制剧本
-                    </button>
-                  </div>
-                  <div className="prose prose-sm max-w-none max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">
-                    {scripts[m18Tab]}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Report content */}
+          <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-strong:text-gray-700 max-h-[500px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{report}</div>
         </section>
       )}
 
