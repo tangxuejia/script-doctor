@@ -134,6 +134,7 @@ export default function Home() {
           <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
             <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
             已输入 <strong className="text-gray-600">{wordCount.toLocaleString()}</strong> 字
+            <button onClick={() => setScriptContent('测试文字' + Math.random())} className="ml-3 rounded bg-yellow-200 px-2 py-0.5 text-[10px] text-yellow-800">测试写入</button>
             {scriptContent.length >= 100 ? ' ✓ 可分析' : ' ⚠ 至少需要 100 字'}
           </div>
         )}
