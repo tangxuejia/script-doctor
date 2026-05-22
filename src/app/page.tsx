@@ -50,7 +50,7 @@ export default function Home() {
       onError: (m) => { setError(m); setIsAnalyzing(false); },
       onComplete: () => { setIsAnalyzing(false); setAnalysisDone(true); },
     }, ctrl);
-  }, [isAnalyzing, scriptContent, selectedModules]);
+  }, [isAnalyzing, scriptContent, selectedModules, appendReport, reset, setError, setIsAnalyzing]);
 
   const handleRevise = useCallback(async () => {
     if (revising) return;
