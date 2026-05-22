@@ -67,7 +67,7 @@ export async function analyzeScript(
         ],
         stream: true,
         temperature: 0.7,
-        max_tokens: 8000,
+        max_tokens: 32000,
       }),
       signal: abortController.signal,
     });
