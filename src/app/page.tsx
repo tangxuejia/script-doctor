@@ -7,59 +7,30 @@ import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
 import ErrorAlert from '@/components/ErrorAlert';
-import ScoreCards from '@/components/ScoreCards';
+
+/* ── Design Tokens ── */
+const VERSIONS = [
+  { id: 'M15_STANDARD' as SolutionVersion, label: '标准版', icon: '✦', desc: '快速打磨', sub: '对白+细节优化 · 不改结构', color: '#f59e0b', bg: '#fffbeb', ring: 'ring-amber-400' },
+  { id: 'M15_DEEP'    as SolutionVersion, label: '深度版', icon: '◆', desc: '结构优化', sub: '情节调整+人物深化 · 冲击精品', color: '#3b82f6', bg: '#eff6ff', ring: 'ring-blue-400' },
+  { id: 'M15_REMAKE'  as SolutionVersion, label: '重塑版', icon: '★', desc: '全面重塑', sub: '立意升级+关系重构 · 冲击S+', color: '#8b5cf6', bg: '#f5f3ff', ring: 'ring-purple-400' },
+];
 
 type InputTab = 'file' | 'text';
 
-const VERSIONS: { id: SolutionVersion; label: string; emoji: string; desc: string; sub: string; color: 'orange' | 'blue' | 'amber' }[] = [
-  { id: 'M15_STANDARD', label: '标准版', emoji: '🟠', desc: '快速打磨', sub: '不改结构', color: 'orange' },
-  { id: 'M15_DEEP',    label: '深度版', emoji: '🔵', desc: '结构优化', sub: '冲击精品', color: 'blue' },
-  { id: 'M15_REMAKE',  label: '重塑版', emoji: '🟡🏆', desc: '全面重塑', sub: '冲击S+级', color: 'amber' },
-];
-
-const VER_COLORS = {
-  orange: { border: 'border-orange-400', bg: 'bg-orange-50', dot: 'bg-orange-500', text: 'text-orange-700', ring: 'ring-orange-200' },
-  blue:   { border: 'border-blue-400',   bg: 'bg-blue-50',   dot: 'bg-blue-500',   text: 'text-blue-700',   ring: 'ring-blue-200' },
-  amber:  { border: 'border-amber-400',  bg: 'bg-amber-50',  dot: 'bg-amber-500',  text: 'text-amber-700',  ring: 'ring-amber-200' },
-};
-
-/* ── Export helpers ── */
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportTxt(text: string) {
-  downloadFile(text, '修改方案.txt', 'text/plain;charset=utf-8');
-}
-
-function exportDocx(text: string) {
-  const html = `<html><head><meta charset="utf-8"><style>body{font-family:SimSun,serif;line-height:2;padding:2cm}</style></head><body>${text.replace(/\n/g, '<br>')}</body></html>`;
-  downloadFile(html, '修改方案.doc', 'application/msword');
-}
-
-function exportPdf(text: string) {
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(`<html><head><meta charset="utf-8"><title>修改方案</title><style>body{font-family:system-ui;max-width:800px;margin:auto;padding:2rem;line-height:2}</style></head><body>${text.replace(/\n/g, '<br>')}</body></html>`);
-  win.document.close();
-  win.print();
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export default function Home() {
   const {
     selectedModules, isAnalyzing, error, report,
     solutionVersion, toggleModule,
-    setIsAnalyzing, appendReport, setError, setSolutionVersion,
-    reset,
+    setIsAnalyzing, appendReport, setError, setSolutionVersion, reset,
   } = useScriptStore();
 
-  // Use local state for scriptContent to fix reactivity issue
   const [scriptContent, setScriptContent] = useState('');
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
@@ -67,137 +38,213 @@ export default function Home() {
   const [revised, setRevised] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
+  const currentStep = !report ? 1 : !analysisDone ? 2 : !revised ? 3 : 4;
 
-  /* ── 1. Initial analysis ── */
   const handleAnalyze = useCallback(async () => {
-    if (isAnalyzing) return;
-    if (!scriptContent.trim()) { setError('请先输入剧本内容'); return; }
-    if (scriptContent.length < 100) { setError(`至少需要100字（当前${scriptContent.length}字）`); return; }
+    if (isAnalyzing || !scriptContent.trim() || scriptContent.length < 100) return;
+    reset(); setAnalysisDone(false); setRevised('');
+    setIsAnalyzing(true); setError(null);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    analyzeScript({ scriptContent, modules: selectedModules }, {
+      onChunk: (c) => appendReport(c),
+      onError: (m) => { setError(m); setIsAnalyzing(false); },
+      onComplete: () => { setIsAnalyzing(false); setAnalysisDone(true); },
+    }, ctrl);
+  }, [isAnalyzing, scriptContent, selectedModules]);
 
-    reset();
-    setAnalysisDone(false);
-    setRevised('');
-    setIsAnalyzing(true);
-    setError(null);
-
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    analyzeScript(
-      { scriptContent, modules: selectedModules },
-      {
-        onChunk: (chunk) => appendReport(chunk),
-        onError: (msg) => { setError(msg); setIsAnalyzing(false); },
-        onComplete: () => { setIsAnalyzing(false); setAnalysisDone(true); },
-      },
-      ctrl,
-    );
-  }, [isAnalyzing, scriptContent, selectedModules, setIsAnalyzing, appendReport, setError, reset]);
-
-  /* ── 2. Regenerate with selected version ── */
   const handleRevise = useCallback(async () => {
     if (revising) return;
-    setRevising(true);
-    setRevised('');
-    setError(null);
-
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    analyzeScript(
-      { scriptContent, modules: [solutionVersion], report },
-      {
-        onChunk: (chunk) => setRevised((p) => p + chunk),
-        onError: (msg) => { setError(msg); setRevising(false); },
-        onComplete: () => setRevising(false),
-      },
-      ctrl,
-    );
+    setRevising(true); setRevised(''); setError(null);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    analyzeScript({ scriptContent, modules: [solutionVersion], report }, {
+      onChunk: (c) => setRevised((p) => p + c),
+      onError: (m) => { setError(m); setRevising(false); },
+      onComplete: () => setRevising(false),
+    }, ctrl);
   }, [revising, scriptContent, solutionVersion, report, setError]);
 
+  const ver = VERSIONS.find(v => v.id === solutionVersion)!;
+
   return (
-    <div className="mx-auto min-h-screen max-w-[960px] px-4 py-6">
-      <header className="mb-6">
-        <h1 className="text-xl font-bold text-slate-800">Script Doctor</h1>
-        <p className="text-sm text-slate-400">剧本多维分析大师 · AI 驱动的专业剧本诊断</p>
+    <div className="mx-auto min-h-screen max-w-[960px] px-4 py-8">
+      {/* ── Header ── */}
+      <header className="mb-10 text-center">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg shadow-teal-200">
+          <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-800">Script Doctor</h1>
+        <p className="mt-1 text-sm text-gray-400">AI 剧本诊断 · 多维分析 · 智能改写</p>
       </header>
 
-      {/* === INPUT SECTION === */}
-      <div className="mb-4 flex rounded-lg bg-slate-100 p-1">
-        <button onClick={() => setTab('file')} className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${tab === 'file' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>上传文件</button>
-        <button onClick={() => setTab('text')} className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${tab === 'text' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>粘贴文本</button>
+      {/* ── Step indicators ── */}
+      <div className="mb-8 flex items-center justify-center gap-2">
+        {['上传剧本', '智能分析', '选择方案', '导出剧本'].map((label, i) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-500 ${
+              currentStep > i + 1 ? 'bg-emerald-500 text-white' :
+              currentStep === i + 1 ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-300' :
+              'bg-gray-100 text-gray-400'
+            }`}>
+              {currentStep > i + 1 ? '✓' : i + 1}
+            </div>
+            <span className={`text-xs font-medium hidden sm:inline ${
+              currentStep >= i + 1 ? 'text-gray-700' : 'text-gray-300'
+            }`}>{label}</span>
+            {i < 3 && <div className={`mx-1 h-px w-6 sm:w-10 ${currentStep > i + 1 ? 'bg-emerald-300' : 'bg-gray-200'}`} />}
+          </div>
+        ))}
       </div>
 
-      {tab === 'file' ? <DropZone onFileLoaded={setScriptContent} /> : <TextInput value={scriptContent} onChange={setScriptContent} />}
+      {/* ── Step 1: Upload ── */}
+      <section className={`rounded-2xl border bg-white p-6 transition-all duration-500 ${currentStep === 1 ? 'border-emerald-200 shadow-lg shadow-emerald-50' : 'border-gray-100 shadow-sm'}`}>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-600">1</span>
+          <h2 className="text-base font-semibold text-gray-800">剧本输入</h2>
+        </div>
 
-      {/* Module checkboxes */}
-      <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
+        <div className="mb-4 flex rounded-xl bg-gray-50 p-1">
+          {(['file', 'text'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+                tab === t ? 'bg-white text-gray-800 shadow-sm ring-1 ring-gray-100' : 'text-gray-400 hover:text-gray-600'
+              }`}>
+              {t === 'file' ? '📁 上传文件' : '✏️ 粘贴文本'}
+            </button>
+          ))}
+        </div>
 
-      {/* Analyze button */}
-      <button onClick={handleAnalyze} disabled={isAnalyzing || !scriptContent.trim()}
-        className={`mt-4 flex w-full items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-white ${isAnalyzing || !scriptContent.trim() ? 'cursor-not-allowed bg-indigo-300' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
-        {isAnalyzing ? <><svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>分析中...</> : `开始分析（${wordCount.toLocaleString()} 字）`}
-      </button>
+        {tab === 'file'
+          ? <DropZone onFileLoaded={setScriptContent} />
+          : <TextInput value={scriptContent} onChange={setScriptContent} />
+        }
+
+        {scriptContent.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            已输入 <strong className="text-gray-600">{wordCount.toLocaleString()}</strong> 字
+            {scriptContent.length >= 100 ? ' ✓ 可分析' : ' ⚠ 至少需要 100 字'}
+          </div>
+        )}
+      </section>
+
+      {/* ── Step 2: Modules + Analyze ── */}
+      <section className={`mt-4 rounded-2xl border bg-white p-6 transition-all duration-500 ${currentStep >= 2 ? 'border-emerald-200 shadow-lg shadow-emerald-50' : 'border-gray-100 shadow-sm'}`}>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-600">2</span>
+          <h2 className="text-base font-semibold text-gray-800">分析模块</h2>
+          <span className="text-xs text-gray-400">（可多选）</span>
+        </div>
+
+        <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
+
+        <button onClick={handleAnalyze} disabled={isAnalyzing || scriptContent.length < 100}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] shadow-md shadow-emerald-200 disabled:opacity-40 disabled:shadow-none">
+          {isAnalyzing ? <>
+            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            AI 正在分析...
+          </> : <>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" /></svg>
+            开始诊断（{wordCount.toLocaleString()} 字）
+          </>}
+        </button>
+      </section>
 
       {/* Error */}
-      {error && <ErrorAlert error={error} onRetry={handleAnalyze} onDismiss={() => setError(null)} />}
+      {error && <div className="mt-4"><ErrorAlert error={error} onRetry={handleAnalyze} onDismiss={() => setError(null)} /></div>}
 
-      {/* === REPORT SECTION (full width, below button) === */}
+      {/* ── Report ── */}
       {report && (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-slate-600">分析报告</h3>
-            <div className="flex gap-2">
-              <button onClick={() => downloadFile(report, '分析报告.txt', 'text/plain')} className="rounded border px-2 py-1 text-xs text-slate-500 hover:bg-slate-50">导出 TXT</button>
+        <section className={`mt-4 rounded-2xl border bg-white p-6 transition-all duration-500 ${currentStep >= 3 ? 'border-gray-100 shadow-sm' : 'border-emerald-200 shadow-lg shadow-emerald-50'}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white ${analysisDone ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`}>
+                {analysisDone ? '✓' : '⏳'}
+              </span>
+              <h2 className="text-base font-semibold text-gray-800">诊断报告</h2>
             </div>
+            {analysisDone && (
+              <div className="flex gap-2">
+                <button onClick={() => downloadFile(report, '诊断报告.txt', 'text/plain')} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">导出 TXT</button>
+                <button onClick={() => downloadFile(report, '诊断报告.md', 'text/markdown')} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">导出 MD</button>
+              </div>
+            )}
           </div>
-          <ScoreCards scores={[]} />
-          <div className="prose prose-sm max-w-none prose-headings:text-slate-800 prose-p:text-slate-600 max-h-[600px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{report}</div>
-        </div>
+          <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-strong:text-gray-700 max-h-[500px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{report}</div>
+        </section>
       )}
 
-      {/* === M15 VERSION SELECTOR (after analysis) === */}
+      {/* ── Step 3: Version selector ── */}
       {analysisDone && (
-        <div className="mt-6 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">选择修改方案版本（三选一）</h3>
+        <section className={`mt-4 rounded-2xl border p-6 transition-all duration-500 ${revised ? 'border-gray-100 shadow-sm' : 'border-emerald-200 shadow-lg shadow-emerald-50'} bg-gradient-to-br from-white to-emerald-50/30`}>
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-600">3</span>
+            <h2 className="text-base font-semibold text-gray-800">剧本改写方案</h2>
+            <span className="text-xs text-gray-400">三选一</span>
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             {VERSIONS.map((v) => {
               const sel = solutionVersion === v.id;
-              const c = VER_COLORS[v.color];
               return (
-                <button key={v.id} onClick={() => setSolutionVersion(v.id)}
-                  className={`flex flex-col items-center rounded-xl border-2 p-3 text-center transition-all ${sel ? `${c.border} ${c.bg} ${c.ring} ring-2` : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                  <span className="text-xl">{v.emoji}</span>
-                  <span className={`mt-1 text-sm font-bold ${sel ? c.text : 'text-slate-700'}`}>{v.label}</span>
-                  <span className="text-xs text-slate-500">{v.desc}</span>
-                  <span className="text-[11px] text-slate-400">{v.sub}</span>
-                  {sel && <span className={`mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${c.dot}`}>✓ 已选</span>}
+                <button key={v.id} onClick={() => setSolutionVersion(v.id)} disabled={revising}
+                  className={`relative flex flex-col items-center rounded-xl p-4 text-center transition-all disabled:opacity-50 ${
+                    sel ? `ring-2 ${v.ring} shadow-lg` : 'border border-gray-100 bg-white hover:border-gray-200 hover:shadow-md'
+                  }`}
+                  style={sel ? { backgroundColor: v.bg, borderColor: v.color } : undefined}>
+                  <span className="text-2xl">{v.icon}</span>
+                  <span className="mt-2 text-sm font-bold text-gray-800">{v.label}</span>
+                  <span className="mt-0.5 text-xs font-medium" style={{ color: v.color }}>{v.desc}</span>
+                  <span className="mt-1 text-[11px] text-gray-400 leading-tight">{v.sub}</span>
+                  {sel && (
+                    <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white shadow" style={{ backgroundColor: v.color }}>✓</span>
+                  )}
                 </button>
               );
             })}
           </div>
 
           <button onClick={handleRevise} disabled={revising}
-            className={`mt-4 flex w-full items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-white ${revising ? 'cursor-not-allowed bg-green-300' : 'bg-green-500 hover:bg-green-600'}`}>
-            {revising ? <><svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>生成中...</> : `生成${VERSIONS.find(v => v.id === solutionVersion)?.label || '标准版'}修改方案`}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed shadow-md active:scale-[0.98]"
+            style={{ backgroundColor: ver.color, opacity: revising ? 0.5 : 1 }}>
+            {revising ? <>
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              正在重写...
+            </> : <>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" /></svg>
+              开始{ver.label}改写
+            </>}
           </button>
 
           {/* Revised output */}
           {revised && (
-            <div className="mt-4 rounded-xl border border-green-200 bg-green-50/20 p-5">
+            <div className="mt-5 rounded-xl border-2 bg-white p-5" style={{ borderColor: ver.color }}>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-green-700">优化后剧本</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{ver.icon}</span>
+                  <h3 className="text-sm font-bold" style={{ color: ver.color }}>新剧本 · {ver.label}</h3>
+                </div>
                 <div className="flex gap-2">
-                  <button onClick={() => exportTxt(revised)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-white">TXT</button>
-                  <button onClick={() => exportDocx(revised)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-white">Word</button>
-                  <button onClick={() => exportPdf(revised)} className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-white">PDF</button>
+                  {[
+                    ['TXT', () => downloadFile(revised, '新剧本.txt', 'text/plain')],
+                    ['Word', () => { const h=`<meta charset="utf-8"><style>body{font-family:SimSun;line-height:2;padding:2cm}</style>${revised.replace(/\n/g,'<br>')}`; downloadFile(h,'新剧本.doc','application/msword') }],
+                    ['PDF', () => { const w=open('','_blank'); if(w){ w.document.write(`<meta charset="utf-8"><title>新剧本</title><style>body{font-family:system-ui;max-width:800px;margin:auto;padding:2rem;line-height:2}</style>${revised.replace(/\n/g,'<br>')}`); w.document.close(); w.print() } }],
+                  ].map(([l, fn]) => (
+                    <button key={l as string} onClick={fn as () => void} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">{l as string}</button>
+                  ))}
                 </div>
               </div>
-              <div className="prose prose-sm max-w-none max-h-[500px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{revised}</div>
+              <div className="prose prose-sm max-w-none max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{revised}</div>
             </div>
           )}
-        </div>
+        </section>
       )}
+
+      {/* ── Footer ── */}
+      <footer className="mt-12 text-center text-xs text-gray-300">
+        Script Doctor · Powered by DeepSeek AI · 免费使用
+      </footer>
     </div>
   );
 }

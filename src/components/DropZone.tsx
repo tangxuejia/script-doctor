@@ -7,16 +7,14 @@ interface Props {
   onFileLoaded: (content: string) => void;
 }
 
-type Status = 'idle' | 'loading' | 'success' | 'error';
-
 export default function DropZone({ onFileLoaded }: Props) {
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const onFileLoadedRef = useRef(onFileLoaded);
-  useEffect(() => { onFileLoadedRef.current = onFileLoaded; });
+  const cbRef = useRef(onFileLoaded);
+  useEffect(() => { cbRef.current = onFileLoaded; });
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -24,7 +22,7 @@ export default function DropZone({ onFileLoaded }: Props) {
     setErrorMsg('');
     try {
       const content = await readFileContent(file);
-      onFileLoadedRef.current(content);
+      cbRef.current(content);
       setStatus('success');
     } catch (err: unknown) {
       setStatus('error');
@@ -32,64 +30,46 @@ export default function DropZone({ onFileLoaded }: Props) {
     }
   };
 
+  const baseStyle = "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer h-[380px] transition-all duration-300";
+
+  const statusStyles: Record<string, string> = {
+    idle: dragOver ? 'border-emerald-400 bg-emerald-50/50 scale-[1.01]' : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50',
+    loading: 'border-emerald-300 bg-emerald-50',
+    success: 'border-emerald-300 bg-emerald-50/50',
+    error: 'border-red-200 bg-red-50',
+  };
+
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-      }}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
       onClick={() => inputRef.current?.click()}
-      className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 text-center cursor-pointer h-[420px] transition-colors ${
-        status === 'success' ? 'border-green-300 bg-green-50' :
-        status === 'error' ? 'border-red-300 bg-red-50' :
-        dragOver ? 'border-indigo-400 bg-indigo-50' :
-        'border-slate-300 bg-slate-50 hover:border-slate-400'
-      }`}
+      className={`${baseStyle} ${statusStyles[status]}`}
     >
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".txt,.doc,.docx,.pdf"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-          if (inputRef.current) inputRef.current.value = '';
-        }}
-      />
+      <input ref={inputRef} type="file" accept=".txt,.doc,.docx,.pdf" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); if (inputRef.current) inputRef.current.value = ''; }} />
 
-      {status === 'loading' && (
-        <svg className="mb-4 h-12 w-12 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      {/* Status icons */}
+      {status === 'loading' && <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100"><svg className="h-7 w-7 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>}
+      {status === 'success' && <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100"><svg className="h-7 w-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg></div>}
+      {status === 'error' && <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100"><svg className="h-7 w-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>}
+      {status === 'idle' && <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full transition-colors ${dragOver ? 'bg-emerald-100' : 'bg-gray-100'}`}>
+        <svg className={`h-7 w-7 transition-colors ${dragOver ? 'text-emerald-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
         </svg>
-      )}
-      {status === 'success' && (
-        <svg className="mb-4 h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-      {status === 'error' && (
-        <svg className="mb-4 h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-      {status === 'idle' && (
-        <svg className="mb-4 h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-        </svg>
-      )}
+      </div>}
 
-      {status === 'loading' && <p className="text-indigo-500 font-medium">正在读取文件...</p>}
-      {status === 'success' && <><p className="text-green-600 font-medium">已加载：{fileName}</p><button onClick={(e) => { e.stopPropagation(); setStatus('idle'); setFileName(''); }} className="mt-3 text-xs text-slate-400 hover:text-slate-600">重新选择</button></>}
-      {status === 'error' && <p className="text-red-500 font-medium">{errorMsg}</p>}
+      {status === 'loading' && <p className="font-medium text-emerald-600">正在解析文件...</p>}
+      {status === 'success' && <>
+        <p className="font-medium text-emerald-700">已解析：<span className="text-gray-700">{fileName}</span></p>
+        <button onClick={(e) => { e.stopPropagation(); setStatus('idle'); setFileName(''); }}
+          className="mt-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">点击重新选择</button>
+      </>}
+      {status === 'error' && <p className="font-medium text-red-500">{errorMsg}</p>}
       {status === 'idle' && <>
-        <p className="text-slate-600 font-medium">{dragOver ? '释放文件以上传' : '拖拽文件到此处，或点击选择'}</p>
-        <p className="mt-2 text-sm text-slate-400">支持 .txt / .docx / .pdf</p>
+        <p className="font-medium text-gray-600">{dragOver ? '释放文件以上传' : '拖拽文件到此处，或点击上传'}</p>
+        <p className="mt-2 text-sm text-gray-400">支持 .txt · .docx · .pdf</p>
       </>}
     </div>
   );
