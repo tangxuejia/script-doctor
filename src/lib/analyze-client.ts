@@ -14,6 +14,7 @@ interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
   report?: string;
+  platforms?: string[];
 }
 
 interface AnalyzeCallbacks {
@@ -42,9 +43,15 @@ export async function analyzeScript(
     }
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
-    const userContent = params.report
-      ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
-      : scriptContent;
+    const userContent = (() => {
+      const base = params.report
+        ? `原始剧本：\n\n${scriptContent}\n\n---\n分析报告：\n\n${params.report}\n\n请根据以上分析报告中的诊断和建议，重写优化原始剧本，输出一部完整的新剧本。`
+        : scriptContent;
+      if (params.platforms && params.platforms.length > 0) {
+        return `目标平台：${params.platforms.join('、')}\n\n${base}`;
+      }
+      return base;
+    })();
 
     const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
       method: 'POST',

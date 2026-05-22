@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useScriptStore, SolutionVersion } from '@/store/useScriptStore';
+import { useScriptStore, SolutionVersion, PLATFORMS, Platform } from '@/store/useScriptStore';
 import { analyzeScript } from '@/lib/analyze-client';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
@@ -30,6 +30,7 @@ export default function Home() {
     selectedModules, isAnalyzing, error, report,
     solutionVersion, toggleModule,
     setIsAnalyzing, appendReport, setError, setSolutionVersion, reset,
+    selectedPlatforms, togglePlatform,
   } = useScriptStore();
 
   const [tab, setTab] = useState<InputTab>('file');
@@ -59,7 +60,7 @@ export default function Home() {
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
       await new Promise<void>((resolve, reject) => {
-        analyzeScript({ scriptContent, modules: selectedModules }, {
+        analyzeScript({ scriptContent, modules: selectedModules, platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined }, {
           onChunk: (c) => appendReport(c),
           onError: (m) => { reject(new Error(m)); },
           onComplete: () => resolve(),
@@ -80,7 +81,7 @@ export default function Home() {
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
       await new Promise<void>((resolve, reject) => {
-        analyzeScript({ scriptContent, modules: [solutionVersion], report }, {
+        analyzeScript({ scriptContent, modules: [solutionVersion], report, platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined }, {
           onChunk: (c) => setRevised((p) => p + c),
           onError: (m) => { reject(new Error(m)); },
           onComplete: () => resolve(),
@@ -170,6 +171,31 @@ export default function Home() {
         </div>
 
         <ModuleSelector selected={selectedModules} onToggle={toggleModule} disabled={isAnalyzing} />
+
+        {/* M16 平台选择器 */}
+        {selectedModules.includes('M16') && (
+          <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-indigo-600">
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              选择目标平台（可多选）
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {PLATFORMS.map((p) => {
+                const sel = selectedPlatforms.includes(p as Platform);
+                return (
+                  <button key={p} onClick={() => togglePlatform(p as Platform)} disabled={isAnalyzing}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                      sel
+                        ? 'bg-indigo-500 text-white shadow-sm'
+                        : 'bg-white text-gray-500 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                    }`}>
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <button onClick={handleAnalyze} disabled={isAnalyzing || scriptContent.length < 100}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-[0.98] shadow-md shadow-emerald-200 disabled:opacity-40 disabled:shadow-none">

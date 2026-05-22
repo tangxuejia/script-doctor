@@ -9,6 +9,9 @@ export interface ScoreItem {
 
 export type SolutionVersion = 'M15_STANDARD' | 'M15_DEEP' | 'M15_REMAKE';
 
+export const PLATFORMS = ['抖音', '快手', '微信视频号', '红果短剧', '爱奇艺', 'B站', '淘宝', '优酷', '腾讯视频'] as const;
+export type Platform = typeof PLATFORMS[number];
+
 interface ScriptState {
   scriptContent: string;
   selectedModules: string[];
@@ -17,6 +20,7 @@ interface ScriptState {
   error: string | null;
   scores: ScoreItem[];
   solutionVersion: SolutionVersion;
+  selectedPlatforms: Platform[];
 
   setScriptContent: (content: string) => void;
   setSelectedModules: (modules: string[]) => void;
@@ -26,6 +30,7 @@ interface ScriptState {
   setError: (error: string | null) => void;
   setScores: (scores: ScoreItem[]) => void;
   setSolutionVersion: (v: SolutionVersion) => void;
+  togglePlatform: (p: Platform) => void;
   reset: () => void;
 }
 
@@ -37,6 +42,7 @@ export const useScriptStore = create<ScriptState>((set) => ({
   error: null,
   scores: [],
   solutionVersion: 'M15_STANDARD',
+  selectedPlatforms: [],
 
   setScriptContent: (content) => set({ scriptContent: content }),
 
@@ -59,6 +65,13 @@ export const useScriptStore = create<ScriptState>((set) => ({
   setScores: (scores) => set({ scores }),
 
   setSolutionVersion: (v) => set({ solutionVersion: v }),
+
+  togglePlatform: (p) =>
+    set((s) => ({
+      selectedPlatforms: s.selectedPlatforms.includes(p)
+        ? s.selectedPlatforms.filter((x) => x !== p)
+        : [...s.selectedPlatforms, p],
+    })),
 
   reset: () =>
     set({
