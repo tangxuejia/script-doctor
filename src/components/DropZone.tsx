@@ -22,12 +22,13 @@ export default function DropZone({ onFileLoaded }: Props) {
     setWordCount(0);
     try {
       const content = await readFileContent(file);
-      if (!content || !content.trim()) {
-        throw new Error('文件内容为空，请检查文件');
-      }
+      // 不过滤空内容，直接传给父组件
       onFileLoaded(content);
       setWordCount(content.length);
-      setStatus('success');
+      if (!content || !content.trim()) {
+        setErrorMsg(`警告：读取到 ${content.length} 字符但有效内容为空（文件类型 .${file.name.split('.').pop()}，大小 ${(file.size / 1024).toFixed(1)}KB）`);
+      }
+      setStatus(content.length > 0 ? 'success' : 'error');
     } catch (err: unknown) {
       setStatus('error');
       setErrorMsg((err as Error).message || '文件读取失败');
