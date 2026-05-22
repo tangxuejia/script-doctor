@@ -75,15 +75,11 @@ export default function Home() {
     }
   }, [selectedModules, toggleModule, setSelectedModules]);
 
-  // Redundant safety: listen for global file load event
+  // Debug: 追踪 scriptContent 变化
   useEffect(() => {
-    const handler = (e: Event) => {
-      const content = (e as CustomEvent).detail as string;
-      if (content) setScriptContent(content);
-    };
-    window.addEventListener('script:loaded', handler);
-    return () => window.removeEventListener('script:loaded', handler);
-  }, [setScriptContent]);
+    console.log('[ScriptDoctor] scriptContent length:', scriptContent.length);
+  }, [scriptContent.length]);
+
   const currentStep = !report ? 1 : !analysisDone ? 2 : !revised ? 3 : 4;
 
   const handleAnalyze = useCallback(async () => {

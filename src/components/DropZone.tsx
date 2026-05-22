@@ -12,17 +12,21 @@ export default function DropZone({ onFileLoaded }: Props) {
   const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
     setStatus('loading');
     setErrorMsg('');
+    setWordCount(0);
     try {
       const content = await readFileContent(file);
-      // Both direct callback AND global event for redundancy
+      if (!content || !content.trim()) {
+        throw new Error('文件内容为空，请检查文件');
+      }
       onFileLoaded(content);
-      window.dispatchEvent(new CustomEvent('script:loaded', { detail: content }));
+      setWordCount(content.length);
       setStatus('success');
     } catch (err: unknown) {
       setStatus('error');
@@ -63,7 +67,8 @@ export default function DropZone({ onFileLoaded }: Props) {
       {status === 'loading' && <p className="font-medium text-emerald-600">正在解析文件...</p>}
       {status === 'success' && <>
         <p className="font-medium text-emerald-700">已解析：<span className="text-gray-700">{fileName}</span></p>
-        <button onClick={(e) => { e.stopPropagation(); setStatus('idle'); setFileName(''); }}
+        <p className="mt-1 text-xs text-gray-400">{wordCount.toLocaleString()} 字</p>
+        <button onClick={(e) => { e.stopPropagation(); setStatus('idle'); setFileName(''); setWordCount(0); }}
           className="mt-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">点击重新选择</button>
       </>}
       {status === 'error' && <p className="font-medium text-red-500">{errorMsg}</p>}
