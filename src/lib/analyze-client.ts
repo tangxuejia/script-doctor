@@ -105,7 +105,8 @@ export async function analyzeScript(
     const systemMsg = buildSysMsg(modules);
 
     // ── 5. Call DeepSeek ──
-    const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY || 'sk-13444d61573f48bfa722c8195b1dd22e';
+    const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
+    if (!DEEPSEEK_KEY) throw new Error('DEEPSEEK_API_KEY not set');
     const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
     const userContent = params.report

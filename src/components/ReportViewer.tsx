@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScoreItem, useScriptStore } from '@/store/useScriptStore';
 import ScoreCards from './ScoreCards';
@@ -81,7 +81,7 @@ export default function ReportViewer() {
   const solutionsRef = useRef<HTMLDivElement>(null);
 
   // Parse scores when analysis finishes
-  useMemo(() => {
+  useEffect(() => {
     if (!isAnalyzing && report) {
       const s = parseScores(report);
       if (s.length) setScores(s);
@@ -103,17 +103,14 @@ export default function ReportViewer() {
   const copyReport = useCallback(async () => {
     await navigator.clipboard.writeText(report);
     setCopied(true);
-    setTimeout(() => setCopied, 2000);
+    setTimeout(() => setCopied(false), 2000);
   }, [report]);
 
   const printReport = useCallback(() => {
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`
-      <html><head><meta charset="utf-8"><title>剧本分析报告</title>
-      <style>body{font-family:system-ui,sans-serif;max-width:800px;margin:auto;padding:2rem;line-height:1.8}</style></head>
-      <body>${report || ''}</body></html>
-    `);
+    const safe = report.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    win.document.write(`<html><head><meta charset="utf-8"><title>剧本分析报告</title><style>body{font-family:system-ui,sans-serif;max-width:800px;margin:auto;padding:2rem;line-height:1.8;white-space:pre-wrap}</style></head><body>${safe}</body></html>`);
     win.document.close();
     win.print();
   }, [report]);
