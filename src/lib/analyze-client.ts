@@ -1,15 +1,13 @@
 'use client';
 
 import { SYSTEM_PROMPT, MODULE_PROMPTS, getM18Prompt } from './prompts';
-import { MODULE_LAYERS, sortByLayer } from './module-deps';
 
 function buildSysMsg(params: {
   modules: string[];
   m18Level?: 'standard' | 'premium' | 'remake';
   platforms?: string[];
-  prevContext?: string;
 }): string {
-  const { modules, m18Level, platforms, prevContext } = params;
+  const { modules, m18Level, platforms } = params;
 
   // M18 standalone mode: no diagnostic modules, just generate optimized script
   if (m18Level && modules.length === 0) {
@@ -20,10 +18,7 @@ function buildSysMsg(params: {
     .filter((m) => MODULE_PROMPTS[m])
     .map((m) => MODULE_PROMPTS[m])
     .join('\n\n');
-  let msg = extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
-  if (prevContext) {
-    msg += `\n\n## 前置模块分析结果（请基于以下结论分析，不要重复诊断）\n\n${prevContext.slice(0, 6000)}`;
-  }
+  const msg = extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
   return msg;
 }
 
@@ -121,46 +116,10 @@ export async function analyzeScript(
       ? `目标平台：${params.platforms.join('、')}\n\n${scriptContent}`
       : scriptContent;
 
-    // ── 分层执行 ──
-    const sorted = sortByLayer(modules);
-    const layers = new Map<number, string[]>();
-    sorted.forEach(m => {
-      const layer = MODULE_LAYERS[m] || 99;
-      if (!layers.has(layer)) layers.set(layer, []);
-      layers.get(layer)!.push(m);
-    });
-
-    // 同层模块合并为一次调用
-    const ordered = Array.from(layers.entries()).sort(([a], [b]) => a - b);
-
-    let fullOutput = '';
-    const allContexts: string[] = [];
-
-    for (let i = 0; i < ordered.length; i++) {
-      if (abortController.signal.aborted) break;
-      const [layerNum, layerModules] = ordered[i];
-      const layerName = ['', '诊断层', '分析层', '方案层', '商业化层'][layerNum] || `第${layerNum}层`;
-
-      // Single layer → run now
-      if (ordered.length === 1) {
-        const sysMsg = buildSysMsg({ modules: layerModules, m18Level: params.m18Level, platforms: params.platforms });
-        const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
-        callbacks.onComplete(output);
-        return;
-      }
-
-      // Multi-layer → accumulate context from all previous layers
-      const prevContext = allContexts.length > 0
-        ? allContexts.map(c => c.slice(-2000)).join('\n---\n')
-        : undefined;
-      onChunk(`\n\n## ${layerName}\n\n`);
-      const sysMsg = buildSysMsg({ modules: layerModules, m18Level: params.m18Level, platforms: params.platforms, prevContext });
-      const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
-      fullOutput += output;
-      allContexts.push(output);
-    }
-
-    callbacks.onComplete(fullOutput);
+    // 所有模块合并为一次调用，一次性诊断每一集
+    const sysMsg = buildSysMsg({ modules, m18Level: params.m18Level, platforms: params.platforms });
+    const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
+    callbacks.onComplete(output);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError') return;
     console.error('Analyze error:', err);
