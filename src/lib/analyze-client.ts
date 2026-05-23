@@ -64,15 +64,76 @@ async function callDeepSeek(
   return full;
 }
 
-// 诊断：只分析不生成
+// 拆分剧本为集
+function splitEpisodes(text: string): string[] {
+  // 匹配各种格式的集数标记
+  const pattern = /(?:^|\n)(?:第\s*\d+\s*集|Episode\s*\d+|Scene\s*\d+[:：])/gim;
+  const matches: { index: number; text: string }[] = [];
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    matches.push({ index: m.index + m[0].length, text: m[0].trim() });
+  }
+
+  if (matches.length === 0) return [text]; // no episode markers, treat as one
+
+  const episodes: string[] = [];
+  // Add header (everything before first episode)
+  const firstEpStart = matches[0].index;
+  if (text.slice(0, firstEpStart).trim()) {
+    episodes.push(text.slice(0, firstEpStart).trim());
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const episodeContent = text.slice(start, end).trim();
+    if (episodeContent) episodes.push(episodeContent);
+  }
+  return episodes;
+}
+
+// 诊断：超过10集自动分批
 export async function analyzeScript(
   scriptContent: string,
   callbacks: AnalyzeCallbacks,
   abortController: AbortController,
 ) {
   try {
-    const output = await callDeepSeek(SYSTEM_PROMPT, scriptContent, callbacks.onChunk, abortController.signal, 65536);
-    callbacks.onComplete(output);
+    const episodes = splitEpisodes(scriptContent);
+    const header = episodes.length > 1 && !/(?:第\s*\d+\s*集|Episode)/i.test(episodes[0]) 
+      ? episodes[0] : '';
+    const epList = header ? episodes.slice(1) : episodes;
+
+    // 10集一批
+    const BATCH = 10;
+    if (epList.length <= BATCH) {
+      // 10集以内直接诊断
+      const output = await callDeepSeek(SYSTEM_PROMPT, scriptContent, callbacks.onChunk, abortController.signal, 65536);
+      callbacks.onComplete(output);
+      return;
+    }
+
+    // 分批诊断
+    callbacks.onChunk(`检测到 ${epList.length} 集，分 ${Math.ceil(epList.length / BATCH)} 批诊断\n\n`);
+    let fullReport = '';
+
+    for (let i = 0; i < epList.length; i += BATCH) {
+      if (abortController.signal.aborted) break;
+      const batchEps = epList.slice(i, i + BATCH);
+      const batchContent = header 
+        ? header + '\n\n' + batchEps.join('\n\n')
+        : batchEps.join('\n\n');
+      const startEp = i + 1;
+      const endEp = Math.min(i + BATCH, epList.length);
+
+      const batchPrompt = SYSTEM_PROMPT + `\n\n本次只诊断第${startEp}集到第${endEp}集。每集独立分析，不可跳过、不可合并。`;
+      callbacks.onChunk(`\n=== 第 ${startEp}-${endEp} 集诊断 ===\n\n`);
+
+      const output = await callDeepSeek(batchPrompt, batchContent, callbacks.onChunk, abortController.signal, 65536);
+      fullReport += output + '\n\n';
+    }
+
+    callbacks.onComplete(fullReport);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError') return;
     console.error('Analyze error:', err);
