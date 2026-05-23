@@ -1,33 +1,18 @@
 'use client';
 
-import { SYSTEM_PROMPT, MODULE_PROMPTS, getM18Prompt } from './prompts';
+import { SYSTEM_PROMPT, MODULE_PROMPTS } from './prompts';
 
-function buildSysMsg(params: {
-  modules: string[];
-  m18Level?: 'standard' | 'premium' | 'remake';
-  platforms?: string[];
-}): string {
-  const { modules, m18Level, platforms } = params;
-
-  // M18 standalone mode: no diagnostic modules, just generate optimized script
-  if (m18Level && modules.length === 0) {
-    return getM18Prompt(m18Level, platforms);
-  }
-
+function buildSysMsg(modules: string[]): string {
   const extras = modules
     .filter((m) => MODULE_PROMPTS[m])
     .map((m) => MODULE_PROMPTS[m])
     .join('\n\n');
-  const msg = extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
-  return msg;
+  return extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
 }
 
 interface AnalyzeParams {
   scriptContent: string;
   modules: string[];
-  platforms?: string[];
-  report?: string;
-  m18Level?: 'standard' | 'premium' | 'remake';
 }
 
 interface AnalyzeCallbacks {
@@ -36,23 +21,19 @@ interface AnalyzeCallbacks {
   onComplete: (fullContent: string) => void;
 }
 
-/** 单次 DeepSeek 调用 */
 async function callDeepSeek(
   systemMsg: string,
   userContent: string,
   onChunk: (c: string) => void,
   signal: AbortSignal,
 ): Promise<string> {
-  const DEEPSEEK_KEY = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
-  if (!DEEPSEEK_KEY) throw new Error('API Key 未配置');
-  const DEEPSEEK_BASE = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+  const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL;
+  if (!baseUrl) throw new Error('API 配置缺失');
 
-  const response = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+  const res = await fetch(baseUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${DEEPSEEK_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
+    signal,
     body: JSON.stringify({
       model: 'deepseek-v4-flash',
       messages: [
@@ -63,30 +44,31 @@ async function callDeepSeek(
       temperature: 0.3,
       max_tokens: 65536,
     }),
-    signal,
   });
 
-  if (!response.ok) {
-    if (response.status === 429) throw new Error('AI 服务调用频率过高，请稍后重试');
-    throw new Error(`AI 服务错误 (${response.status})，请稍后重试`);
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(`API 错误 (${res.status})${msg ? ': ' + msg.slice(0, 200) : ''}`);
   }
 
-  const reader = response.body!.getReader();
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('API 响应异常');
+
   const decoder = new TextDecoder();
   let full = '';
-  let buf = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+    const text = decoder.decode(value, { stream: true });
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      const data = trimmed.slice(6);
+      if (data === '[DONE]') continue;
       try {
-        const data = JSON.parse(line.slice(6));
-        const content: string = data.choices?.[0]?.delta?.content ?? '';
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content;
         if (content) { full += content; onChunk(content); }
       } catch { /* skip */ }
     }
@@ -103,22 +85,8 @@ export async function analyzeScript(
   const { onChunk, onError } = callbacks;
 
   try {
-    // M18 standalone mode: generate optimized script from report
-    if (params.report && params.m18Level && modules.length === 0) {
-      const userContent = `原始剧本：\n\n${scriptContent}\n\n---\n诊断报告：\n\n${params.report}\n\n请根据以上诊断报告中的建议进行优化改写。`;
-      const sysMsg = buildSysMsg({ modules: [], m18Level: params.m18Level, platforms: params.platforms });
-      const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
-      callbacks.onComplete(output);
-      return;
-    }
-
-    const userContent = params.platforms && params.platforms.length > 0
-      ? `目标平台：${params.platforms.join('、')}\n\n${scriptContent}`
-      : scriptContent;
-
-    // 所有模块合并为一次调用，一次性诊断每一集
-    const sysMsg = buildSysMsg({ modules, m18Level: params.m18Level, platforms: params.platforms });
-    const output = await callDeepSeek(sysMsg, userContent, onChunk, abortController.signal);
+    const sysMsg = buildSysMsg(modules);
+    const output = await callDeepSeek(sysMsg, scriptContent, onChunk, abortController.signal);
     callbacks.onComplete(output);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError') return;
