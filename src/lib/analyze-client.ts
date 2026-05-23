@@ -141,7 +141,7 @@ export async function analyzeScript(
   }
 }
 
-// 生成：基于诊断报告输出新剧本
+// 生成：基于诊断报告分批输出新剧本
 export async function generateScript(
   scriptContent: string,
   report: string,
@@ -149,9 +149,41 @@ export async function generateScript(
   abortController: AbortController,
 ) {
   try {
-    const userContent = `原始剧本：\n\n${scriptContent}\n\n---\n诊断报告：\n\n${report}\n\n请根据诊断报告的建议，输出完整的优化后剧本。`;
-    const output = await callDeepSeek(GENERATION_PROMPT, userContent, callbacks.onChunk, abortController.signal, 131072);
-    callbacks.onComplete(output);
+    const episodes = splitEpisodes(scriptContent);
+    const header = episodes.length > 1 && !/(?:第\s*\d+\s*集|Episode)/i.test(episodes[0]) 
+      ? episodes[0] : '';
+    const epList = header ? episodes.slice(1) : episodes;
+
+    const BATCH = 10;
+    if (epList.length <= BATCH) {
+      const userContent = `原始剧本：\n\n${scriptContent}\n\n---\n完整诊断报告：\n\n${report}\n\n请根据以上诊断报告的建议，输出完整的优化后剧本。`;
+      const output = await callDeepSeek(GENERATION_PROMPT, userContent, callbacks.onChunk, abortController.signal, 131072);
+      callbacks.onComplete(output);
+      return;
+    }
+
+    // 分批生成，每批拿到完整诊断报告
+    callbacks.onChunk(`共 ${epList.length} 集，分 ${Math.ceil(epList.length / BATCH)} 批生成\n\n`);
+    let fullScript = '';
+
+    for (let i = 0; i < epList.length; i += BATCH) {
+      if (abortController.signal.aborted) break;
+      const batchEps = epList.slice(i, i + BATCH);
+      const batchContent = header 
+        ? header + '\n\n' + batchEps.join('\n\n')
+        : batchEps.join('\n\n');
+      const startEp = i + 1;
+      const endEp = Math.min(i + BATCH, epList.length);
+
+      const batchPrompt = GENERATION_PROMPT + `\n\n本次只生成第${startEp}集到第${endEp}集的剧本。必须参考完整的诊断报告（已提供），确保每集修改符合诊断建议。每集独立完整，逐集输出。`;
+      const userContent = `原始剧本（第${startEp}-${endEp}集）：\n\n${batchContent}\n\n---\n完整诊断报告：\n\n${report}\n\n请根据诊断报告中的逐集建议，输出第${startEp}集到第${endEp}集的完整优化剧本。`;
+      
+      callbacks.onChunk(`\n=== 第 ${startEp}-${endEp} 集剧本 ===\n\n`);
+      const output = await callDeepSeek(batchPrompt, userContent, callbacks.onChunk, abortController.signal, 65536);
+      fullScript += output + '\n\n';
+    }
+
+    callbacks.onComplete(fullScript);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError') return;
     console.error('Generate error:', err);
