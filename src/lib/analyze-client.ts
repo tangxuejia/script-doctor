@@ -190,3 +190,81 @@ export async function generateScript(
     callbacks.onError((err as Error).message || '生成失败');
   }
 }
+
+// 对话修改剧本
+export async function chatScript(
+  newScript: string,
+  report: string,
+  conversation: { role: 'user' | 'assistant'; content: string }[],
+  userMessage: string,
+  callbacks: AnalyzeCallbacks,
+  abortController: AbortController,
+) {
+  const systemMsg = `你是一位剧本修改顾问。用户正在与你讨论修改一份已生成的剧本。
+
+对话规则：
+- 根据用户的修改要求，给出修改后的剧本片段
+- 如果你同意用户的修改建议，直接输出修改后的内容
+- 如果用户的建议有问题，礼貌指出并提供更好的方案
+- 保持剧本格式规范（△动作、角色名：对白、〖字幕〗等）
+- 你只输出需要修改的部分，不要重写整个剧本
+
+以下是完整诊断报告供参考：
+${report}`;
+
+  const messages = [
+    { role: 'assistant' as const, content: '剧本已生成，请告诉我你想修改哪些地方。' },
+    ...conversation.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    { role: 'user' as const, content: userMessage },
+  ];
+
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL;
+    if (!baseUrl) throw new Error('API 配置缺失');
+
+    const res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash',
+        messages: [{ role: 'system', content: systemMsg }, ...messages],
+        stream: true,
+        temperature: 0.5,
+        max_tokens: 8192,
+      }),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '');
+      throw new Error(`API 错误 (${res.status})${msg ? ': ' + msg.slice(0, 200) : ''}`);
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('API 响应异常');
+
+    const decoder = new TextDecoder();
+    let full = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value, { stream: true });
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) { full += content; callbacks.onChunk(content); }
+        } catch { /* skip */ }
+      }
+    }
+    callbacks.onComplete(full);
+  } catch (err: unknown) {
+    if ((err as Error).name === 'AbortError') return;
+    callbacks.onError((err as Error).message || '对话失败');
+  }
+}
