@@ -34,7 +34,6 @@ async function callDeepSeek(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
-    signal,
     body: JSON.stringify({
       model: 'deepseek-v4-flash',
       messages: [
