@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore } from '@/store/useScriptStore';
-import { analyzeScript } from '@/lib/analyze-client';
+import { analyzeScript, generateScript } from '@/lib/analyze-client';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ErrorAlert from '@/components/ErrorAlert';
@@ -25,6 +25,8 @@ export default function Home() {
 
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [newScript, setNewScript] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
 
@@ -34,12 +36,12 @@ export default function Home() {
 
   const handleAnalyze = useCallback(async () => {
     if (isAnalyzing || !scriptContent.trim() || scriptContent.length < 100) return;
-    reset(); setAnalysisDone(false);
+    reset(); setAnalysisDone(false); setNewScript('');
     setIsAnalyzing(true); setError(null);
     const ctrl = new AbortController(); abortRef.current = ctrl;
     try {
       await new Promise<void>((resolve, reject) => {
-        analyzeScript({ scriptContent, modules: [] }, {
+        analyzeScript(scriptContent, {
           onChunk: (c) => appendReport(c),
           onError: (m) => { reject(new Error(m)); },
           onComplete: () => resolve(),
@@ -52,6 +54,25 @@ export default function Home() {
       setIsAnalyzing(false);
     }
   }, [isAnalyzing, scriptContent, appendReport, reset, setError, setIsAnalyzing]);
+
+  const handleGenerate = useCallback(async () => {
+    if (generating || !report) return;
+    setGenerating(true); setNewScript(''); setError(null);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        generateScript(scriptContent, report, {
+          onChunk: (c) => setNewScript((p) => p + c),
+          onError: (m) => { reject(new Error(m)); },
+          onComplete: () => resolve(),
+        }, ctrl);
+      });
+      setGenerating(false);
+    } catch (err) {
+      setError((err as Error).message || '生成失败');
+      setGenerating(false);
+    }
+  }, [generating, report, scriptContent, setError]);
 
   return (
     <div className="mx-auto min-h-screen max-w-[960px] px-4 py-8">
@@ -129,6 +150,37 @@ export default function Home() {
             )}
           </div>
           <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-strong:text-gray-700 max-h-[600px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 scrollbar-thin">{report}</div>
+        </section>
+      )}
+
+      {/* ── Generate new script ── */}
+      {analysisDone && (
+        <section className="mt-4 rounded-2xl border border-purple-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100 text-xs font-bold text-purple-600">3</span>
+            <h2 className="text-base font-semibold text-gray-800">生成新剧本</h2>
+            <span className="text-xs text-gray-400">基于诊断报告生成可直接投稿的完整剧本</span>
+          </div>
+          <button onClick={handleGenerate} disabled={generating}
+            className="flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-40 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 active:scale-[0.98] shadow-md shadow-purple-200">
+            {generating ? <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>正在生成新剧本...</> : '生成新剧本'}
+          </button>
+          {generating && (
+            <button onClick={() => abortRef.current?.abort()}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-all">
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>停止生成
+            </button>
+          )}
+          {newScript && (
+            <div className="mt-5 rounded-xl border-2 border-purple-200 bg-purple-50/30 p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-bold text-purple-600">新剧本</span>
+                <button onClick={() => downloadFile(newScript, '新剧本.txt', 'text/plain')}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors">导出 TXT</button>
+              </div>
+              <div className="prose prose-sm max-w-none max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600">{newScript}</div>
+            </div>
+          )}
         </section>
       )}
 

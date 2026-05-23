@@ -1,19 +1,6 @@
 'use client';
 
-import { SYSTEM_PROMPT, MODULE_PROMPTS } from './prompts';
-
-function buildSysMsg(modules: string[]): string {
-  const extras = modules
-    .filter((m) => MODULE_PROMPTS[m])
-    .map((m) => MODULE_PROMPTS[m])
-    .join('\n\n');
-  return extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT;
-}
-
-interface AnalyzeParams {
-  scriptContent: string;
-  modules: string[];
-}
+import { SYSTEM_PROMPT, GENERATION_PROMPT } from './prompts';
 
 interface AnalyzeCallbacks {
   onChunk: (chunk: string) => void;
@@ -26,6 +13,7 @@ async function callDeepSeek(
   userContent: string,
   onChunk: (c: string) => void,
   signal: AbortSignal,
+  maxTokens: number = 65536,
 ): Promise<string> {
   const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL;
   if (!baseUrl) throw new Error('API 配置缺失');
@@ -42,7 +30,7 @@ async function callDeepSeek(
       ],
       stream: true,
       temperature: 0.3,
-      max_tokens: 131072,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -76,21 +64,36 @@ async function callDeepSeek(
   return full;
 }
 
+// 诊断：只分析不生成
 export async function analyzeScript(
-  params: AnalyzeParams,
+  scriptContent: string,
   callbacks: AnalyzeCallbacks,
   abortController: AbortController,
 ) {
-  const { scriptContent, modules } = params;
-  const { onChunk, onError } = callbacks;
-
   try {
-    const sysMsg = buildSysMsg(modules);
-    const output = await callDeepSeek(sysMsg, scriptContent, onChunk, abortController.signal);
+    const output = await callDeepSeek(SYSTEM_PROMPT, scriptContent, callbacks.onChunk, abortController.signal, 65536);
     callbacks.onComplete(output);
   } catch (err: unknown) {
     if ((err as Error).name === 'AbortError') return;
     console.error('Analyze error:', err);
-    onError((err as Error).message || '分析失败，请重试');
+    callbacks.onError((err as Error).message || '诊断失败');
+  }
+}
+
+// 生成：基于诊断报告输出新剧本
+export async function generateScript(
+  scriptContent: string,
+  report: string,
+  callbacks: AnalyzeCallbacks,
+  abortController: AbortController,
+) {
+  try {
+    const userContent = `原始剧本：\n\n${scriptContent}\n\n---\n诊断报告：\n\n${report}\n\n请根据诊断报告的建议，输出完整的优化后剧本。`;
+    const output = await callDeepSeek(GENERATION_PROMPT, userContent, callbacks.onChunk, abortController.signal, 131072);
+    callbacks.onComplete(output);
+  } catch (err: unknown) {
+    if ((err as Error).name === 'AbortError') return;
+    console.error('Generate error:', err);
+    callbacks.onError((err as Error).message || '生成失败');
   }
 }
