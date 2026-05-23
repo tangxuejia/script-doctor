@@ -4,7 +4,6 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useScriptStore, PLATFORMS, Platform } from '@/store/useScriptStore';
 import { MODULES } from '@/store/modules';
 import { analyzeScript } from '@/lib/analyze-client';
-import { findMissingDeps, findAffectedModules, MODULE_CONFLICTS, MODULE_NAMES } from '@/lib/module-deps';
 import DropZone from '@/components/DropZone';
 import TextInput from '@/components/TextInput';
 import ModuleSelector from '@/components/ModuleSelector';
@@ -49,47 +48,18 @@ export default function Home() {
 
   const [tab, setTab] = useState<InputTab>('file');
   const [analysisDone, setAnalysisDone] = useState(false);
-  const [depNotice, setDepNotice] = useState('');
-  const [depNoticeType, setDepNoticeType] = useState<'info' | 'warn'>('info');
   const [m18Level, setM18Level] = useState<M18Level>('standard');
   const [m18Generating, setM18Generating] = useState(false);
   const [generatedScript, setGeneratedScript] = useState('');
-  const depTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController | null>(null);
   const wordCount = scriptContent.length;
 
   const handleToggleModule = useCallback((id: string) => {
-    setDepNotice('');
-    const willSelect = !selectedModules.includes(id);
-    if (willSelect) {
-      const deps = findMissingDeps([...selectedModules, id]);
-      const newMods = Array.from(new Set([...selectedModules, id, ...deps]));
-      setSelectedModules(newMods);
-      if (deps.length > 0) {
-        const names = deps.map(d => MODULE_NAMES[d] || d).join('、');
-        setDepNoticeType('info');
-        setDepNotice(`已自动勾选 ${names}（${id} 依赖此模块）`);
-        clearTimeout(depTimerRef.current);
-        depTimerRef.current = setTimeout(() => setDepNotice(''), 5000);
-      }
-    } else {
-      toggleModule(id);
-      const affected = findAffectedModules(id, selectedModules.filter(m => m !== id));
-      if (affected.length > 0) {
-        const names = affected.map(d => MODULE_NAMES[d] || d).join('、');
-        setDepNoticeType('warn');
-        setDepNotice(`⚠ ${names} 依赖 ${MODULE_NAMES[id] || id}，缺少此模块可能影响分析质量`);
-        clearTimeout(depTimerRef.current);
-        depTimerRef.current = setTimeout(() => setDepNotice(''), 6000);
-      }
-    }
-  }, [selectedModules, toggleModule, setSelectedModules]);
+    toggleModule(id);
+  }, [toggleModule]);
 
   useEffect(() => {
-    return () => {
-      clearTimeout(depTimerRef.current);
-      abortRef.current?.abort();
-    };
+    return () => { abortRef.current?.abort(); };
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -202,15 +172,6 @@ export default function Home() {
           <h2 className="text-base font-semibold text-gray-800">分析模块</h2>
           <span className="text-xs text-gray-400">（可多选）</span>
         </div>
-        {depNotice && (
-          <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${depNoticeType === 'warn' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-indigo-200 bg-indigo-50 text-indigo-600'}`}>{depNotice}</div>
-        )}
-        {MODULE_CONFLICTS.map(([a, b, msg]) => {
-          if (selectedModules.includes(a) && selectedModules.includes(b)) {
-            return <div key={`${a}-${b}`} className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-600">⚠ {MODULE_NAMES[a]} + {MODULE_NAMES[b]}：{msg}</div>;
-          }
-          return null;
-        }).filter(Boolean)}
         <ModuleSelector selected={selectedModules} onToggle={handleToggleModule} disabled={isAnalyzing}
           onSelectAll={(select) => setSelectedModules(select ? ALL_MODULE_IDS : [])}
           onSelectPreset={(ids) => setSelectedModules(ids)} />
