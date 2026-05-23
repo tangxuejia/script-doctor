@@ -42,7 +42,7 @@ async function callDeepSeek(
       ],
       stream: true,
       temperature: 0.3,
-      max_tokens: 65536,
+      max_tokens: 131072,
     }),
   });
 
