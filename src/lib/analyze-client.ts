@@ -65,8 +65,8 @@ async function callDeepSeek(
         { role: 'user', content: userContent },
       ],
       stream: true,
-      temperature: 0.7,
-      max_tokens: 32000,
+      temperature: 0.3,
+      max_tokens: 65536,
     }),
     signal,
   });
