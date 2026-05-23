@@ -34,14 +34,14 @@ export default function Home() {
   const [finalScript, setFinalScript] = useState('');
   const [finalGenerating, setFinalGenerating] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const wordCount = scriptContent.length;
+  const wordCount = scriptContent.replace(/\s/g, '').length;
 
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
 
   const handleAnalyze = useCallback(async () => {
-    if (isAnalyzing || !scriptContent.trim() || scriptContent.length < 100) return;
+    if (isAnalyzing || !scriptContent.trim() || wordCount < 100) return;
     reset(); setAnalysisDone(false); setNewScript('');
     setIsAnalyzing(true); setError(null);
     const ctrl = new AbortController(); abortRef.current = ctrl;

@@ -64,28 +64,46 @@ async function callDeepSeek(
   return full;
 }
 
-// 拆分剧本为集
+// 拆分剧本为集（严格匹配）
 function splitEpisodes(text: string): string[] {
-  // 匹配各种格式的集数标记
-  const pattern = /(?:^|\n)(?:第\s*\d+\s*集|Episode\s*\d+|Scene\s*\d+[:：])/gim;
-  const matches: { index: number; text: string }[] = [];
+  // 只匹配行首的「第X集」，且该行不含大量其他内容（避免误匹配对话中的"第5集"）
+  const pattern = /^[ \t]*(?:第\s*(\d+)\s*集)(?:\s|$|[：:])/gim;
+  const candidates: { index: number; epNum: number; text: string }[] = [];
   let m;
   while ((m = pattern.exec(text)) !== null) {
-    matches.push({ index: m.index + m[0].length, text: m[0].trim() });
+    candidates.push({ index: m.index, epNum: parseInt(m[1]), text: m[0] });
   }
 
-  if (matches.length === 0) return [text]; // no episode markers, treat as one
+  if (candidates.length === 0) return [text];
+
+  // 去重：同一集号只保留第一个
+  const seen = new Set<number>();
+  const matches = candidates.filter(c => {
+    if (seen.has(c.epNum)) return false;
+    seen.add(c.epNum);
+    return true;
+  });
+
+  // 验证集号连续性（如果出现跳号>2，可能有误匹配，取连续部分）
+  let validEnd = matches.length;
+  for (let i = 1; i < matches.length; i++) {
+    if (matches[i].epNum - matches[i - 1].epNum > 3) {
+      validEnd = i;
+      break;
+    }
+  }
+  const valid = matches.slice(0, validEnd);
 
   const episodes: string[] = [];
-  // Add header (everything before first episode)
-  const firstEpStart = matches[0].index;
-  if (text.slice(0, firstEpStart).trim()) {
-    episodes.push(text.slice(0, firstEpStart).trim());
+  // header: everything before first episode marker
+  const headerEnd = valid[0].index;
+  if (text.slice(0, headerEnd).trim()) {
+    episodes.push(text.slice(0, headerEnd).trim());
   }
 
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].index;
-    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+  for (let i = 0; i < valid.length; i++) {
+    const start = valid[i].index;
+    const end = i + 1 < valid.length ? valid[i + 1].index : text.length;
     const episodeContent = text.slice(start, end).trim();
     if (episodeContent) episodes.push(episodeContent);
   }
