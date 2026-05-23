@@ -39,7 +39,7 @@ async function callDeepSeek(
     headers,
     signal,
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: [
         { role: 'system', content: systemMsg },
         { role: 'user', content: userContent },
