@@ -59,7 +59,7 @@ async function callDeepSeek(
       Authorization: `Bearer ${DEEPSEEK_KEY}`,
     },
     body: JSON.stringify({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-v4',
       messages: [
         { role: 'system', content: systemMsg },
         { role: 'user', content: userContent },
