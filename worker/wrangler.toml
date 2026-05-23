@@ -1,0 +1,5 @@
+name = "script-doctor-api"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# 免费计划自动分配 *.workers.dev 域名

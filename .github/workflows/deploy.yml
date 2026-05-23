@@ -27,7 +27,6 @@ jobs:
       - run: npm run build
         env:
           CI: false
-          NEXT_PUBLIC_DEEPSEEK_API_KEY: ${{ secrets.NEXT_PUBLIC_DEEPSEEK_API_KEY }}
           NEXT_PUBLIC_DEEPSEEK_BASE_URL: ${{ secrets.NEXT_PUBLIC_DEEPSEEK_BASE_URL }}
 
       - uses: actions/upload-pages-artifact@v3

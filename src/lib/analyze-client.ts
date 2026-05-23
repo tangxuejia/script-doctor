@@ -28,15 +28,12 @@ async function callDeepSeek(
   signal: AbortSignal,
 ): Promise<string> {
   const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL;
-  const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
   if (!baseUrl) throw new Error('API 配置缺失');
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (apiKey) { headers['Authorization'] = `Bearer ${apiKey}`; }
 
   const res = await fetch(baseUrl, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
+    signal,
     signal,
     body: JSON.stringify({
       model: 'deepseek-v4-flash',
